@@ -1,0 +1,46 @@
+#!/bin/bash
+
+
+exec ./initialize
+
+export BM_DIR=$PWD
+
+# install eigen
+wget http://bitbucket.org/eigen/eigen/get/3.2.4.zip
+
+unzip -d 3.2.4.zip -d eigen
+
+export EIGEN=$BM_DIR/eigen/eigen-eigen-10219c95fe65/Eigen/
+
+# install boost
+brew install boost
+
+export BOOST=/usr/local/include/boost
+
+# install mtl-4
+wget http://www.simunova.com/downloads/mtl4/MTL-4.0.9555-Linux.zip
+unzip MTL-4.0.9555-Linux.zip -d mtl-4
+
+export MTL4=$BM_DIR/mtl-4/MTL-4.0.9555-Linux/usr/include/boost/
+
+# install Armadillo
+wget http://sourceforge.net/projects/arma/files/armadillo-4.650.3.tar.gz
+tar -xvf armadillo-4.650.3.tar.gz 
+
+brew install cmake
+cd armadillo-4.650.3
+
+cmake .
+make
+make install DESTDIR=.
+
+export ARMADILLO_INC=$BM_DIR/armadillo-4.650.3/usr/include/
+export ARMADILLO_LIB=$BM_DIR/armadillo-4.650.3/lib/
+
+cd $BM_DIR
+
+
+
+
+
+

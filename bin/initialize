@@ -1,0 +1,9 @@
+#!/bin/bash
+
+# Installs wget and brew to install wget.
+
+# installs brew
+ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)"
+
+brew install wget
+
