@@ -1,46 +1,79 @@
 #!/bin/bash
 
-
-exec ./initialize
+# Test arguments
+export M=2048
+export N=2048
+export TRIALS=10
+export WARMUP=10 # number of trials to warm up the JVM
+export K=1024
+export A=2048
+export B=1024
+export C=512
+export D=256
 
 export BM_DIR=$PWD
+export CPP_DIR=$BM_DIR/src/main/cpp
+
+bash $BM_DIR/bin/initialize 1> /dev/null
 
 # install eigen
-wget http://bitbucket.org/eigen/eigen/get/3.2.4.zip
+if [ -z ${EIGEN+x} ]; then
+  if [ ! -e "$BM_DIR/3.2.4.zip" ]; then
+    wget http://bitbucket.org/eigen/eigen/get/3.2.4.zip
 
-unzip -d 3.2.4.zip -d eigen
-
-export EIGEN=$BM_DIR/eigen/eigen-eigen-10219c95fe65/Eigen/
+    unzip -d 3.2.4.zip -d eigen
+  fi
+  export EIGEN=$BM_DIR/eigen/eigen-eigen-10219c95fe65
+fi
 
 # install boost
-brew install boost
-
-export BOOST=/usr/local/include/boost
+if [ ! -e "/usr/local/include/boost" ]; then
+  brew install boost
+fi
 
 # install mtl-4
-wget http://www.simunova.com/downloads/mtl4/MTL-4.0.9555-Linux.zip
-unzip MTL-4.0.9555-Linux.zip -d mtl-4
+if [ -z ${MTL4+x} ]; then
+  if [ ! -e "$BM_DIR/MTL-4.0.9555-Linux.zip" ]; then
+    wget http://www.simunova.com/downloads/mtl4/MTL-4.0.9555-Linux.zip
+    unzip MTL-4.0.9555-Linux.zip -d mtl-4
 
-export MTL4=$BM_DIR/mtl-4/MTL-4.0.9555-Linux/usr/include/boost/
+  fi
+  export MTL4=$BM_DIR/mtl-4/MTL-4.0.9555-Linux/usr/include
+fi
 
 # install Armadillo
-wget http://sourceforge.net/projects/arma/files/armadillo-4.650.3.tar.gz
-tar -xvf armadillo-4.650.3.tar.gz 
+if [ -z ${ARMA+x} ]; then
+  if [ ! -e "$BM_DIR/armadillo-4.650.3.tar.gz" ]; then
+    wget http://sourceforge.net/projects/arma/files/armadillo-4.650.3.tar.gz
+    tar -xvf armadillo-4.650.3.tar.gz
 
-brew install cmake
-cd armadillo-4.650.3
+    brew install cmake
+    cd armadillo-4.650.3
 
-cmake .
-make
-make install DESTDIR=.
+    cmake .
+    make
+    make install DESTDIR=.
 
-export ARMADILLO_INC=$BM_DIR/armadillo-4.650.3/usr/include/
-export ARMADILLO_LIB=$BM_DIR/armadillo-4.650.3/lib/
+  fi
+  export ARMA=$BM_DIR/armadillo-4.650.3/usr/include
+fi
 
 cd $BM_DIR
 
+# Compile C++ libraries
+g++ -Wall $CPP_DIR/arma.cpp -o $CPP_DIR/arma -O2 -I $ARMA -DARMA_DONT_USE_WRAPPER -framework Accelerate -lboost_program_options
+g++ -Wall $CPP_DIR/eigen.cpp -o $CPP_DIR/eigen -O2 -I $EIGEN -framework Accelerate -lboost_program_options
+g++ -Wall $CPP_DIR/ublas.cpp -o $CPP_DIR/ublas -O2 -framework Accelerate -lboost_program_options
+# g++ -Wall $CPP_DIR/mtl.cpp -o $CPP_DIR/mtl -O2 -I $MTL4 -framework Accelerate -lboost_program_options
 
+# Compile Scala code
+$BM_DIR/build/sbt assembly > /dev/null
+export MLLIB=$BM_DIR/target/scala-2.10/linalg-benchmarks-assembly-0.0.1.jar
+export MLLIB_MAIN="brkyvz.linalg.Main"
 
-
+$CPP_DIR/arma --m $M --n $N --k $K --trials $TRIALS --a $A --b $B --c $C --d $D
+$CPP_DIR/eigen --m $M --n $N --k $K --trials $TRIALS --a $A --b $B --c $C --d $D
+# $CPP_DIR/ublas --m $M --n $N --k $K --trials $TRIALS --a $A --b $B --c $C --d $D
+java -cp $MLLIB $MLLIB_MAIN --m $M --n $N --k $K --trials $TRIALS --warmup $WARMUP --a $A --b $B --c $C --d $D
 
 
