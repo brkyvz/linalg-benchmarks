@@ -25,8 +25,6 @@ import brkyvz.linalg.VectorOperators._
 import scala.annotation.varargs
 import scala.collection.JavaConverters._
 
-import breeze.linalg.{DenseVector => BDV, SparseVector => BSV, Vector => BV}
-
 /**
  * Represents a numeric vector, whose index type is Int and value type is Double.
  *
@@ -72,15 +70,10 @@ sealed trait Vector extends Serializable with VectorLike {
   }
 
   /**
-   * Converts the instance to a breeze vector.
-   */
-   def toBreeze: BV[Double]
-
-  /**
    * Gets the value of the ith element.
    * @param i index
    */
-  override def apply(i: Int): Double = toBreeze(i)
+  override def apply(i: Int): Double
 
   /**
    * Makes a deep copy of this vector.
@@ -169,28 +162,6 @@ object Vectors {
    */
   def zeros(size: Int): Vector = {
     new DenseVector(new Array[Double](size))
-  }
-
-  /**
-   * Creates a vector instance from a breeze vector.
-   */
-   def fromBreeze(breezeVector: BV[Double]): Vector = {
-    breezeVector match {
-      case v: BDV[Double] =>
-        if (v.offset == 0 && v.stride == 1 && v.length == v.data.length) {
-          new DenseVector(v.data)
-        } else {
-          new DenseVector(v.toArray)  // Can't use underlying array directly, so make a new one
-        }
-      case v: BSV[Double] =>
-        if (v.index.length == v.used) {
-          new SparseVector(v.length, v.index, v.data)
-        } else {
-          new SparseVector(v.length, v.index.slice(0, v.used), v.data.slice(0, v.used))
-        }
-      case v: BV[_] =>
-        sys.error("Unsupported Breeze vector type: " + v.getClass.getName)
-    }
   }
 
   /**
@@ -370,8 +341,6 @@ class DenseVector(val values: Array[Double]) extends Vector {
 
   override def toArray: Array[Double] = values
 
-   override def toBreeze: BV[Double] = new BDV[Double](values)
-
   override def apply(i: Int) = values(i)
 
   override def copy: DenseVector = {
@@ -388,10 +357,6 @@ class DenseVector(val values: Array[Double]) extends Vector {
       i += 1
     }
   }
-  def +=(y: VectorLike): LazyVector = addInto(this, y, this)
-  def -=(y: VectorLike): LazyVector = subInto(this, y, this)
-  def *=(y: VectorLike): LazyVector = mulInto(this, y, this)
-  def /=(y: VectorLike): LazyVector = divInto(this, y, this)
 }
 
 object DenseVector {
@@ -426,12 +391,12 @@ class SparseVector(
     }
     data
   }
+  
+  override def apply(i: Int): Double = values(i)
 
   override def copy: SparseVector = {
     new SparseVector(size, indices.clone(), values.clone())
   }
-
-   override def toBreeze: BV[Double] = new BSV[Double](indices, values, size)
 
    override def foreachActive(f: (Int, Double) => Unit) = {
     var i = 0
@@ -453,8 +418,6 @@ object SparseVector {
 
 trait LazyVector extends Vector {
   def compute(): Vector
-  
-  override def toBreeze = compute().toBreeze
 
   override def foreachActive(f: (Int, Double) => Unit): Unit = compute().foreachActive(f)
 

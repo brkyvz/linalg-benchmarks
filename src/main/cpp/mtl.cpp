@@ -96,10 +96,13 @@ int main(int argc, char *argv[]) {
     int c;
     int d;
     int k;
-
+    int l;
+  
     po::options_description desc("Allowed options");
     desc.add_options()
         ("help", "produce help message")
+        ("l", po::value<int>(&l)->default_value(1048576),
+                    "length of vectors in vector addition test")
         ("m", po::value<int>(&m)->default_value(1024),
             "numRows of matrices in Simple Test, and gemm Test")
         ("n", po::value<int>(&n)->default_value(1024),
@@ -121,7 +124,7 @@ int main(int argc, char *argv[]) {
     po::store(po::parse_command_line(argc, argv, desc), vm);
     po::notify(vm);
 
-    runMTLTests(trials, m, n, k, a, b, c, d);
+    runMTLTests(trials, l, m, n, k, a, b, c, d);
 
     return 0;
 }

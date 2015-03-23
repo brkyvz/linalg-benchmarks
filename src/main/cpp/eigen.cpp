@@ -17,16 +17,32 @@ inline double simpleDenseTest_Eigen(const int m, const int n, const int num_tria
   MatrixXd E = MatrixXd::Random(m, n);
   
   clock_t start;
-  double duration = 0.0;
-    
+  start = clock();
   for (unsigned i = 0; i < num_trials; i++) {
-    start = clock();
 
     MatrixXd res = ((A + B).cwiseQuotient(C) - D).cwiseProduct(E);
 
-    duration += ( std::clock() - start ) / (double) CLOCKS_PER_SEC;
   }
+  double duration = ( std::clock() - start ) / (double) CLOCKS_PER_SEC;
+  return duration / num_trials;
 
+}
+
+// m: numRows of A, n: numCols of A, and numRows of B, k: numCols of B
+inline double gemmSanityTest_Eigen(const int m, const int n, const int k, const int num_trials) {
+
+  MatrixXd A = MatrixXd::Random(m, n);
+  MatrixXd C = MatrixXd::Random(n, k);
+  MatrixXd E = MatrixXd::Random(m, k);
+
+  clock_t start;
+  start = clock();
+  for (unsigned i = 0; i < num_trials; i++) {
+
+    E.noalias() += A * C;
+
+  }
+  double duration = ( std::clock() - start ) / (double) CLOCKS_PER_SEC;
   return duration / num_trials;
 
 }
@@ -41,16 +57,13 @@ inline double gemmDenseTest_Eigen(const int m, const int n, const int k, const i
   MatrixXd E = MatrixXd::Random(m, k);
 
   clock_t start;
-  double duration = 0.0;
-    
+  start = clock();
   for (unsigned i = 0; i < num_trials; i++) {
-    start = clock();
 
     E.noalias() += (A + B) * (C - D);
 
-    duration += ( std::clock() - start ) / (double) CLOCKS_PER_SEC;
   }
-
+  double duration = ( std::clock() - start ) / (double) CLOCKS_PER_SEC;
   return duration / num_trials;
 
 }
@@ -63,23 +76,43 @@ inline double mulDenseTest_Eigen(const int a, const int b, const int c, const in
   MatrixXd D = MatrixXd::Random(c, d);
 
   clock_t start;
-  double duration = 0.0;
-    
+  start = clock();
   for (unsigned i = 0; i < num_trials; i++) {
-    start = clock();
 
     MatrixXd res = A * B * C * D;
 
-    duration += ( std::clock() - start ) / (double) CLOCKS_PER_SEC;
   }
-
+  double duration = ( std::clock() - start ) / (double) CLOCKS_PER_SEC;
   return duration / num_trials;
 
 }
 
-void runEigenTests(int num_trials, int m, int n, int k, int a, int b, int c, int d) {
+// m: numRows of A, n: numCols of A, and numRows of B, k: numCols of B
+inline double denseVectorTest_Eigen(int l, int num_trials) {
 
+  VectorXd a = VectorXd::Random(l);
+  VectorXd b = VectorXd::Random(l);
+  VectorXd c = VectorXd::Random(l);
+  VectorXd d = VectorXd::Random(l);
+  VectorXd res(l);
+
+  clock_t start;
+  start = clock();
+  for (unsigned i = 0; i < num_trials; i++) {
+
+    res = a + b + c + d;
+
+  }
+  double duration = ( std::clock() - start ) / (double) CLOCKS_PER_SEC;
+
+  return duration / num_trials;
+}
+
+void runEigenTests(int num_trials, int l, int m, int n, int k, int a, int b, int c, int d) {
+
+   cout << "Eigen Vectors Test:\t" << denseVectorTest_Eigen(l, num_trials) << endl;
    cout << "Eigen Simple Test:\t" << simpleDenseTest_Eigen(m, n, num_trials) << endl;
+   cout << "Eigen gemmSanity Test:\t" << gemmDenseTest_Eigen(m, n, k, num_trials) << endl;
    cout << "Eigen gemm Test:\t" << gemmDenseTest_Eigen(m, n, k, num_trials) << endl;
    cout << "Eigen mulDense Test:\t" << mulDenseTest_Eigen(a, b, c, d, num_trials) << endl;
 
@@ -95,10 +128,13 @@ int main(int argc, char *argv[]) {
     int c;
     int d;
     int k;
+    int l;
 
     po::options_description desc("Allowed options");
     desc.add_options()
         ("help", "produce help message")
+        ("l", po::value<int>(&l)->default_value(1048576),
+                    "length of vectors in vector addition test")
         ("m", po::value<int>(&m)->default_value(1024),
             "numRows of matrices in Simple Test, and gemm Test")
         ("n", po::value<int>(&n)->default_value(1024),
@@ -120,7 +156,7 @@ int main(int argc, char *argv[]) {
     po::store(po::parse_command_line(argc, argv, desc), vm);
     po::notify(vm);
 
-    runEigenTests(trials, m, n, k, a, b, c, d);
+    runEigenTests(trials, l, m, n, k, a, b, c, d);
 
     return 0;
 }

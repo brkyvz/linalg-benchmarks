@@ -10,9 +10,12 @@ export A=2048
 export B=1024
 export C=512
 export D=256
+export L=1048576
 
 export BM_DIR=$PWD
 export CPP_DIR=$BM_DIR/src/main/cpp
+
+export RESULTS=$BM_DIR/results.tsv
 
 bash $BM_DIR/bin/initialize 1> /dev/null
 
@@ -61,6 +64,8 @@ fi
 cd $BM_DIR
 
 # Compile C++ libraries
+rm $CPP_DIR/arma $CPP_DIR/eigen $CPP_DIR/ublas $CPP_DIR/mtl
+
 g++ -Wall $CPP_DIR/arma.cpp -o $CPP_DIR/arma -O2 -I $ARMA -DARMA_DONT_USE_WRAPPER -framework Accelerate -lboost_program_options
 g++ -Wall $CPP_DIR/eigen.cpp -o $CPP_DIR/eigen -O2 -I $EIGEN -framework Accelerate -lboost_program_options
 g++ -Wall $CPP_DIR/ublas.cpp -o $CPP_DIR/ublas -O2 -framework Accelerate -lboost_program_options
@@ -71,9 +76,9 @@ $BM_DIR/build/sbt assembly > /dev/null
 export MLLIB=$BM_DIR/target/scala-2.10/linalg-benchmarks-assembly-0.0.1.jar
 export MLLIB_MAIN="brkyvz.linalg.Main"
 
-$CPP_DIR/arma --m $M --n $N --k $K --trials $TRIALS --a $A --b $B --c $C --d $D
-$CPP_DIR/eigen --m $M --n $N --k $K --trials $TRIALS --a $A --b $B --c $C --d $D
-# $CPP_DIR/ublas --m $M --n $N --k $K --trials $TRIALS --a $A --b $B --c $C --d $D
-java -cp $MLLIB $MLLIB_MAIN --m $M --n $N --k $K --trials $TRIALS --warmup $WARMUP --a $A --b $B --c $C --d $D
+$CPP_DIR/arma --m $M --n $N --k $K --trials $TRIALS --a $A --b $B --c $C --d $D --l $L 1> $RESULTS
+$CPP_DIR/eigen --m $M --n $N --k $K --trials $TRIALS --a $A --b $B --c $C --d $D --l $L 1>> $RESULTS
+# $CPP_DIR/ublas --m $M --n $N --k $K --trials $TRIALS --a $A --b $B --c $C --d $D --l $L 1>> $RESULTS
+java -cp $MLLIB $MLLIB_MAIN --m $M --n $N --k $K --trials $TRIALS --warmup $WARMUP --a $A --b $B --c $C --d $D --l $L 1>> $RESULTS 2> /dev/null
 
 

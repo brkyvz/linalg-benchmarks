@@ -19,19 +19,15 @@ package brkyvz.linalg
 
 import java.util.{Arrays, Random}
 
+import brkyvz.linalg.MatrixOperators.MatrixLikeDouble
+
 import scala.collection.mutable.{ArrayBuilder => MArrayBuilder, HashSet => MHashSet, ArrayBuffer}
 
 /**
  * Trait for a local matrix.
  */
-sealed trait Matrix extends Serializable {
-
-  /** Number of rows. */
-  def numRows: Int
-
-  /** Number of columns. */
-  def numCols: Int
-
+sealed trait Matrix extends Serializable with MatrixLike {
+  
   /** Flag that keeps track whether the matrix is transposed or not. False by default. */
   val isTransposed: Boolean = false
 
@@ -137,8 +133,6 @@ class DenseMatrix(
     case _ => false
   }
   
-  def size: Int = values.length
-  
   def apply(i: Int): Double = values(i)
 
   override def apply(i: Int, j: Int): Double = values(index(i, j))
@@ -222,166 +216,34 @@ class DenseMatrix(
     new SparseMatrix(numRows, numCols, colPtrs, rowIndices.result(), spVals.result())
   }
   
-  def operate(other: DenseMatrix, f: (Double, Double) => Double): this.type = {
-    var i = 0
-    while (i < size) {
-      values(i) = f(values(i), other(i))
-      i += 1
+  def *(y: DenseMatrix): LazyMatrix = new LazyDD_MMultOp(this, y)
+  def *(y: LazyMatrix): LazyMatrix = new LazyDL_MMultOp(this, y)
+  def +=(y: LazyDD_MMultOp): this.type = {
+    new LazyDD_MMultOp(y.left, y.right, Option(this)).compute()
+    this
+  }
+  def +=(y: LazyDL_MMultOp): this.type = {
+    new LazyDL_MMultOp(y.left, y.right, Option(this)).compute()
+    this
+  }
+  def +=(y: LazyLD_MMultOp): this.type = {
+    new LazyLD_MMultOp(y.left, y.right, Option(this)).compute()
+    this
+  }
+  def +=(y: LazyLL_MMultOp): this.type = {
+    new LazyLL_MMultOp(y.left, y.right, Option(this)).compute()
+    this
+  }
+  def +=(y: LazyMatrix): this.type = {
+    y match {
+      case dd: LazyDD_MMultOp => this += dd
+      case dl: LazyDL_MMultOp => this += dl
+      case ld: LazyLD_MMultOp => this += ld
+      case ll: LazyLL_MMultOp => this += ll
+      case _ => throw new IllegalArgumentException
     }
     this
   }
-
-  def assign(other: LazyD_Im_MM_Op): this.type = {
-    var i = 0
-    while (i < size) {
-      values(i) = other(i)
-      i += 1
-    }
-    this
-  }
-
-  def assign(other: LazyD_Im_ML_Op): this.type = {
-    var i = 0
-    while (i < size) {
-      values(i) = other(i)
-      i += 1
-    }
-    this
-  }
-
-  def assign(other: LazyD_Im_LM_Op): this.type = {
-    var i = 0
-    while (i < size) {
-      values(i) = other(i)
-      i += 1
-    }
-    this
-  }
-
-  def assign(other: LazyD_Im_LL_Op): this.type = {
-    var i = 0
-    while (i < size) {
-      values(i) = other(i)
-      i += 1
-    }
-    this
-  }
-
-  def assign(other: LazyD_Im_M_Op): this.type = {
-    var i = 0
-    while (i < size) {
-      values(i) = other(i)
-      i += 1
-    }
-    this
-  }
-
-  def assign(other: LazyD_Im_MS_Op): this.type = {
-    var i = 0
-    while (i < size) {
-      values(i) = other(i)
-      i += 1
-    }
-    this
-  }
-
-  def assign(other: LazyD_Im_SM_Op): this.type = {
-    var i = 0
-    while (i < size) {
-      values(i) = other(i)
-      i += 1
-    }
-    this
-  }
-
-  def assign(other: LazyD_DD_MMult_Op): this.type = {
-    BLAS.gemm(1.0, other.left, other.right, 1.0, this)
-    this
-  }
-  
-  def +(y: DenseMatrix): LazyD_Im_MM_Op = new LazyD_Im_MM_Op(this, y, _ + _)
-  def -(y: DenseMatrix): LazyD_Im_MM_Op = new LazyD_Im_MM_Op(this, y, _ - _)
-  def :*(y: DenseMatrix): LazyD_Im_MM_Op = new LazyD_Im_MM_Op(this, y, _ * _)
-  def /(y: DenseMatrix): LazyD_Im_MM_Op = new LazyD_Im_MM_Op(this, y, _ / _)
-
-  def +=(y: DenseMatrix): this.type = operate(y, _ + _)
-  def -=(y: DenseMatrix): this.type = operate(y, _ - _)
-  def :*=(y: DenseMatrix): this.type = operate(y, _ * _)
-  def /=(y: DenseMatrix): this.type = operate(y, _ / _)
-  
-  // scalars
-  def +(y: Double): LazyD_Im_MS_Op = new LazyD_Im_MS_Op(this, y, _ + _)
-  def -(y: Double): LazyD_Im_MS_Op = new LazyD_Im_MS_Op(this, y, _ - _)
-  def :*(y: Double): LazyD_Im_MS_Op = new LazyD_Im_MS_Op(this, y, _ * _)
-  def /(y: Double): LazyD_Im_MS_Op = new LazyD_Im_MS_Op(this, y, _ / _)
-
-  def +=(y: Double): DenseMatrix = update { v: Double => v + y }
-  def -=(y: Double): DenseMatrix = update { v: Double => v - y}
-  def :*=(y: Double): DenseMatrix = update { v: Double => v * y}
-  def /=(y: Double): DenseMatrix = update { v: Double => v / y}
-  
-  // lazy matrices
-  def +(y: LazyD_Im_MM_Op): LazyD_Im_ML_Op = new LazyD_Im_ML_Op(this, y, _ + _)
-  def -(y: LazyD_Im_MM_Op): LazyD_Im_ML_Op = new LazyD_Im_ML_Op(this, y, _ - _)
-  def :*(y: LazyD_Im_MM_Op): LazyD_Im_ML_Op = new LazyD_Im_ML_Op(this, y, _ * _)
-  def /(y: LazyD_Im_MM_Op): LazyD_Im_ML_Op = new LazyD_Im_ML_Op(this, y, _ / _)
-
-  def +(y: LazyD_Im_ML_Op): LazyD_Im_ML_Op = new LazyD_Im_ML_Op(this, y, _ + _)
-  def -(y: LazyD_Im_ML_Op): LazyD_Im_ML_Op = new LazyD_Im_ML_Op(this, y, _ - _)
-  def :*(y: LazyD_Im_ML_Op): LazyD_Im_ML_Op = new LazyD_Im_ML_Op(this, y, _ * _)
-  def /(y: LazyD_Im_ML_Op): LazyD_Im_ML_Op = new LazyD_Im_ML_Op(this, y, _ / _)
-
-  def +(y: LazyD_Im_LM_Op): LazyD_Im_ML_Op = new LazyD_Im_ML_Op(this, y, _ + _)
-  def -(y: LazyD_Im_LM_Op): LazyD_Im_ML_Op = new LazyD_Im_ML_Op(this, y, _ - _)
-  def :*(y: LazyD_Im_LM_Op): LazyD_Im_ML_Op = new LazyD_Im_ML_Op(this, y, _ * _)
-  def /(y: LazyD_Im_LM_Op): LazyD_Im_ML_Op = new LazyD_Im_ML_Op(this, y, _ / _)
-
-  def +(y: LazyD_Im_LL_Op): LazyD_Im_ML_Op = new LazyD_Im_ML_Op(this, y, _ + _)
-  def -(y: LazyD_Im_LL_Op): LazyD_Im_ML_Op = new LazyD_Im_ML_Op(this, y, _ - _)
-  def :*(y: LazyD_Im_LL_Op): LazyD_Im_ML_Op = new LazyD_Im_ML_Op(this, y, _ * _)
-  def /(y: LazyD_Im_LL_Op): LazyD_Im_ML_Op = new LazyD_Im_ML_Op(this, y, _ / _)
-
-  def +(y: LazyD_Im_M_Op): LazyD_Im_ML_Op = new LazyD_Im_ML_Op(this, y, _ + _)
-  def -(y: LazyD_Im_M_Op): LazyD_Im_ML_Op = new LazyD_Im_ML_Op(this, y, _ - _)
-  def :*(y: LazyD_Im_M_Op): LazyD_Im_ML_Op = new LazyD_Im_ML_Op(this, y, _ * _)
-  def /(y: LazyD_Im_M_Op): LazyD_Im_ML_Op = new LazyD_Im_ML_Op(this, y, _ / _)
-
-  def +=(y: LazyD_Im_MM_Op): this.type = operate(y.compute(), _ + _)
-  def -=(y: LazyD_Im_MM_Op): this.type = operate(y.compute(), _ - _)
-  def :*=(y: LazyD_Im_MM_Op): this.type = operate(y.compute(), _ * _)
-  def /=(y: LazyD_Im_MM_Op): this.type = operate(y.compute(), _ / _)
-
-  def +=(y: LazyD_Im_ML_Op): this.type = operate(y.compute(), _ + _)
-  def -=(y: LazyD_Im_ML_Op): this.type = operate(y.compute(), _ - _)
-  def :*=(y: LazyD_Im_ML_Op): this.type = operate(y.compute(), _ * _)
-  def /=(y: LazyD_Im_ML_Op): this.type = operate(y.compute(), _ / _)
-
-  def +=(y: LazyD_Im_LM_Op): this.type = operate(y.compute(), _ + _)
-  def -=(y: LazyD_Im_LM_Op): this.type = operate(y.compute(), _ - _)
-  def :*=(y: LazyD_Im_LM_Op): this.type = operate(y.compute(), _ * _)
-  def /=(y: LazyD_Im_LM_Op): this.type = operate(y.compute(), _ / _)
-
-  def +=(y: LazyD_Im_LL_Op): this.type = operate(y.compute(), _ + _)
-  def -=(y: LazyD_Im_LL_Op): this.type = operate(y.compute(), _ - _)
-  def :*=(y: LazyD_Im_LL_Op): this.type = operate(y.compute(), _ * _)
-  def /=(y: LazyD_Im_LL_Op): this.type = operate(y.compute(), _ / _)
-
-  def +=(y: LazyD_Im_M_Op): this.type = operate(y.compute(), _ + _)
-  def -=(y: LazyD_Im_M_Op): this.type = operate(y.compute(), _ - _)
-  def :*=(y: LazyD_Im_M_Op): this.type = operate(y.compute(), _ * _)
-  def /=(y: LazyD_Im_M_Op): this.type = operate(y.compute(), _ / _)
-
-  def ~(y: LazyD_Im_M_Op): this.type = assign(y)
-  def ~(y: LazyD_Im_MM_Op): this.type = assign(y)
-  def ~(y: LazyD_Im_ML_Op): this.type = assign(y)
-  def ~(y: LazyD_Im_LM_Op): this.type = assign(y)
-  def ~(y: LazyD_Im_LL_Op): this.type = assign(y)
-  def ~(y: LazyD_Im_MS_Op): this.type = assign(y)
-  def ~(y: LazyD_Im_SM_Op): this.type = assign(y)
-  
-  def ~(y: LazyD_DD_MMult_Op): this.type = assign(y)
-  
-  def *(y: DenseMatrix): LazyD_DD_MMult_Op = new LazyD_DD_MMult_Op(this, y)
 }
 
 object DenseMatrix {
@@ -1019,757 +881,374 @@ object Matrices {
   }
 }
 
-abstract class LazyImmutableDenseMatrix {
-  def size: Int
-}
+trait MatrixLike {
 
-case class LazyD_Im_MM_Op(left: DenseMatrix,
-                     right: DenseMatrix,
-                     operation: (Double, Double) => Double) extends LazyImmutableDenseMatrix {
+  /** Number of rows. */
+  def numRows: Int
+
+  /** Number of columns. */
+  def numCols: Int
   
-  def numRows: Int = math.max(left.numRows, right.numRows)
-  def numCols: Int = math.max(left.numCols, right.numCols)
-  def size = numRows * numCols
+  def size: Int = numRows * numCols
+
+  def apply(i: Int): Double
+
+  import MatrixOperators._
+  def +(y: MatrixLike): LazyMatrix = add(this, y)
+  def -(y: MatrixLike): LazyMatrix = sub(this, y)
+  def :*(y: MatrixLike): LazyMatrix = mul(this, y)
+  def /(y: MatrixLike): LazyMatrix = div(this, y)
+}
+
+trait LazyMatrix extends Matrix {
+
+  def compute(): DenseMatrix = {
+    val values = new Array[Double](size)
+    var i = 0
+    while (i < size) {
+      values(i) = this(i)
+      i += 1
+    }
+    new DenseMatrix(numRows, numCols, values)
+  }
+
+  override def foreachActive(f: (Int, Int, Double) => Unit): Unit = compute().foreachActive(f)
+
+  override def toArray: Array[Double] = compute().toArray
+
+  def *(y: DenseMatrix): LazyMatrix = new LazyLD_MMultOp(this, y)
+  def *(y: LazyMatrix): LazyMatrix = new LazyLL_MMultOp(this, y)
+}
+
+
+abstract class LazyMMOp(left: MatrixLike,
+                        right: MatrixLike,
+                        operation: (Double, Double) => Double) extends LazyMatrix {
+  override def numRows = math.max(left.numRows, right.numRows)
+  override def numCols = math.max(left.numCols, right.numCols)
+
+}
+
+class LazyImDenseMMOp(
+    left: MatrixLike,
+    right: MatrixLike,
+    operation: (Double, Double) => Double) extends LazyMMOp(left, right, operation) {
+
+  override def apply(i: Int): Double = operation(left(i), right(i))
+  override def apply(i: Int, j: Int): Double = {
+    val ind = index(i, j)
+    operation(left(ind), right(ind))
+  }
+  override def copy: brkyvz.linalg.Matrix = compute().copy
+  override def index(i: Int, j: Int): Int = if (!isTransposed) i + numRows * j else j + numCols * i
+  override def map(f: Double => Double): LazyImDenseMOp = new LazyImDenseMOp(this, f)
+  override def transpose: Matrix = compute().transpose
+  override def update(f: Double => Double): Matrix = compute().update(f)
+  override def update(i: Int, j: Int, v: Double): Unit = compute().update(i, j, v)
+}
+
+case class LazyImDenseScaleOp(
+    left: MatrixLikeDouble,
+    right: Matrix) extends LazyImDenseMMOp(left, right, _ * _)
+
+abstract class LazyMOp(parent: Matrix,
+                       operation: Double => Double) extends LazyMatrix {
+  override def numRows = parent.numRows
+  override def numCols = parent.numCols
+
+}
+
+class LazyImDenseMOp(parent: Matrix,
+                     operation: Double => Double) extends LazyMOp(parent, operation) {
+
+  override def apply(i: Int): Double = operation(parent(i))
+  override def apply(i: Int, j: Int): Double = operation(parent(index(i, j)))
+  override def copy: brkyvz.linalg.Matrix = compute().copy
+  override def index(i: Int, j: Int): Int = if (!isTransposed) i + numRows * j else j + numCols * i
+  override def map(f: Double => Double): LazyImDenseMOp = new LazyImDenseMOp(this, f)
+  override def transpose: Matrix = compute().transpose
+  override def update(f: Double => Double): Matrix = compute().update(f)
+  override def update(i: Int, j: Int, v: Double): Unit = compute().update(i, j, v)
+}
+
+abstract class LazyMMultOp(
+    left: Matrix, 
+    right: Matrix,
+    into: Option[DenseMatrix] = None) extends LazyMatrix {
+  override def numRows = left.numRows
+  override def numCols = right.numCols
   
-  def compute(): DenseMatrix = {
-    val values = new Array[Double](size)
-    var i = 0
-    while (i < size) {
-      values(i) = this(i)
-      i += 1
-    }
-    new DenseMatrix(numRows, numCols, values)
-  }
-
-  def apply(i: Int): Double = operation(left(i), right(i))
-
-  def +(y: DenseMatrix): LazyD_Im_LM_Op = new LazyD_Im_LM_Op(this, y, _ + _)
-  def -(y: DenseMatrix): LazyD_Im_LM_Op = new LazyD_Im_LM_Op(this, y, _ - _)
-  def :*(y: DenseMatrix): LazyD_Im_LM_Op = new LazyD_Im_LM_Op(this, y, _ * _)
-  def /(y: DenseMatrix): LazyD_Im_LM_Op = new LazyD_Im_LM_Op(this, y, _ / _)
-
-  // lazy matrices
-  def +(y: LazyD_Im_MM_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ + _)
-  def -(y: LazyD_Im_MM_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ - _)
-  def :*(y: LazyD_Im_MM_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ * _)
-  def /(y: LazyD_Im_MM_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ / _)
-
-  def +(y: LazyD_Im_ML_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ + _)
-  def -(y: LazyD_Im_ML_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ - _)
-  def :*(y: LazyD_Im_ML_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ * _)
-  def /(y: LazyD_Im_ML_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ / _)
-
-  def +(y: LazyD_Im_LM_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ + _)
-  def -(y: LazyD_Im_LM_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ - _)
-  def :*(y: LazyD_Im_LM_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ * _)
-  def /(y: LazyD_Im_LM_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ / _)
-
-  def +(y: LazyD_Im_LL_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ + _)
-  def -(y: LazyD_Im_LL_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ - _)
-  def :*(y: LazyD_Im_LL_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ * _)
-  def /(y: LazyD_Im_LL_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ / _)
-
-  def +(y: LazyD_Im_M_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ + _)
-  def -(y: LazyD_Im_M_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ - _)
-  def :*(y: LazyD_Im_M_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ * _)
-  def /(y: LazyD_Im_M_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ / _)
 }
 
-case class LazyD_Im_LM_Op(left: LazyImmutableDenseMatrix,
-                          right: DenseMatrix,
-                          operation: (Double, Double) => Double) extends LazyImmutableDenseMatrix {
+class LazyLL_MMultOp(
+    val left: LazyMatrix,
+    val right: LazyMatrix,
+    into: Option[DenseMatrix] = None) extends LazyMMultOp(left, right, into) {
+  override def apply(i: Int): Double = result(i)
+  override def apply(i: Int, j: Int): Double = result(index(i, j))
+  override def copy: brkyvz.linalg.Matrix = compute().copy
+  override def index(i: Int, j: Int): Int = if (!isTransposed) i + numRows * j else j + numCols * i
+  override def map(f: Double => Double): LazyImDenseMOp = new LazyImDenseMOp(this, f)
+  override def transpose: Matrix = compute().transpose
+  override def update(f: Double => Double): Matrix = compute().update(f)
+  override def update(i: Int, j: Int, v: Double): Unit = result.update(i, j, v)
 
-  def numRows: Int = {
-    math.max(left match {
-      case mm: LazyD_Im_MM_Op => mm.numRows
-      case lm: LazyD_Im_LM_Op => lm.numRows
-      case ml: LazyD_Im_ML_Op => ml.numRows
-      case sm: LazyD_Im_SM_Op => sm.numRows
-      case ms: LazyD_Im_MS_Op => ms.numRows
-      case ld: LazyD_LDD_MMult_Op => ld.numRows
-      case dl: LazyD_DLD_MMult_Op => dl.numRows
-      case dd: LazyD_DD_MMult_Op => dd.numRows
-      case ll: LazyD_LDLD_MMult_Op => ll.numRows
-      case m: LazyD_Im_M_Op => m.numRows
-    }, right.numRows)
-  }
-  def numCols: Int = math.max(left match {
-    case mm: LazyD_Im_MM_Op => mm.numCols
-    case lm: LazyD_Im_LM_Op => lm.numCols
-    case ml: LazyD_Im_ML_Op => ml.numCols
-    case sm: LazyD_Im_SM_Op => sm.numCols
-    case ms: LazyD_Im_MS_Op => ms.numCols
-    case ld: LazyD_LDD_MMult_Op => ld.numCols
-    case dl: LazyD_DLD_MMult_Op => dl.numCols
-    case dd: LazyD_DD_MMult_Op => dd.numCols
-    case ll: LazyD_LDLD_MMult_Op => ll.numCols
-    case m: LazyD_Im_M_Op => m.numCols
-  }, right.numCols)
-  def size = numRows * numCols
-
-  def compute(): DenseMatrix = {
-    val values = new Array[Double](size)
-    var i = 0
-    while (i < size) {
-      values(i) = this(i)
-      i += 1
-    }
-    new DenseMatrix(numRows, numCols, values)
-  }
-
-  def apply(i: Int): Double = operation(left match {
-    case mm: LazyD_Im_MM_Op => mm(i)
-    case lm: LazyD_Im_LM_Op => lm(i)
-    case ml: LazyD_Im_ML_Op => ml(i)
-    case sm: LazyD_Im_SM_Op => sm(i)
-    case ms: LazyD_Im_MS_Op => ms(i)
-    case ld: LazyD_LDD_MMult_Op => ld(i)
-    case dl: LazyD_DLD_MMult_Op => dl(i)
-    case dd: LazyD_DD_MMult_Op => dd(i)
-    case ll: LazyD_LDLD_MMult_Op => ll(i)
-    case m: LazyD_Im_M_Op => m(i)
-  }, right(i))
-
-  def +(y: DenseMatrix): LazyD_Im_LM_Op = new LazyD_Im_LM_Op(this, y, _ + _)
-  def -(y: DenseMatrix): LazyD_Im_LM_Op = new LazyD_Im_LM_Op(this, y, _ - _)
-  def :*(y: DenseMatrix): LazyD_Im_LM_Op = new LazyD_Im_LM_Op(this, y, _ * _)
-  def /(y: DenseMatrix): LazyD_Im_LM_Op = new LazyD_Im_LM_Op(this, y, _ / _)
-
-  // lazy matrices
-  def +(y: LazyD_Im_MM_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ + _)
-  def -(y: LazyD_Im_MM_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ - _)
-  def :*(y: LazyD_Im_MM_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ * _)
-  def /(y: LazyD_Im_MM_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ / _)
-
-  def +(y: LazyD_Im_ML_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ + _)
-  def -(y: LazyD_Im_ML_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ - _)
-  def :*(y: LazyD_Im_ML_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ * _)
-  def /(y: LazyD_Im_ML_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ / _)
-
-  def +(y: LazyD_Im_LM_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ + _)
-  def -(y: LazyD_Im_LM_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ - _)
-  def :*(y: LazyD_Im_LM_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ * _)
-  def /(y: LazyD_Im_LM_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ / _)
-
-  def +(y: LazyD_Im_LL_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ + _)
-  def -(y: LazyD_Im_LL_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ - _)
-  def :*(y: LazyD_Im_LL_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ * _)
-  def /(y: LazyD_Im_LL_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ / _)
-
-  def +(y: LazyD_Im_M_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ + _)
-  def -(y: LazyD_Im_M_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ - _)
-  def :*(y: LazyD_Im_M_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ * _)
-  def /(y: LazyD_Im_M_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ / _)
-}
-
-case class LazyD_Im_ML_Op(left: DenseMatrix,
-                          right: LazyImmutableDenseMatrix,
-                          operation: (Double, Double) => Double) extends LazyImmutableDenseMatrix {
-
-  def numRows: Int = {
-    math.max(left.numRows, right match {
-      case mm: LazyD_Im_MM_Op => mm.numRows
-      case lm: LazyD_Im_LM_Op => lm.numRows
-      case ml: LazyD_Im_ML_Op => ml.numRows
-      case sm: LazyD_Im_SM_Op => sm.numRows
-      case ms: LazyD_Im_MS_Op => ms.numRows
-      case ld: LazyD_LDD_MMult_Op => ld.numRows
-      case dl: LazyD_DLD_MMult_Op => dl.numRows
-      case dd: LazyD_DD_MMult_Op => dd.numRows
-      case ll: LazyD_LDLD_MMult_Op => ll.numRows
-      case m: LazyD_Im_M_Op => m.numRows
-    })
-  }
-  def numCols: Int = math.max(left.numCols, right match {
-    case mm: LazyD_Im_MM_Op => mm.numCols
-    case lm: LazyD_Im_LM_Op => lm.numCols
-    case ml: LazyD_Im_ML_Op => ml.numCols
-    case sm: LazyD_Im_SM_Op => sm.numCols
-    case ms: LazyD_Im_MS_Op => ms.numCols
-    case ld: LazyD_LDD_MMult_Op => ld.numCols
-    case dl: LazyD_DLD_MMult_Op => dl.numCols
-    case dd: LazyD_DD_MMult_Op => dd.numCols
-    case ll: LazyD_LDLD_MMult_Op => ll.numCols
-    case m: LazyD_Im_M_Op => m.numCols
-  })
-  def size = numRows * numCols
-
-  def compute(): DenseMatrix = {
-    val values = new Array[Double](size)
-    var i = 0
-    while (i < size) {
-      values(i) = this(i)
-      i += 1
-    }
-    new DenseMatrix(numRows, numCols, values)
-  }
-
-  def apply(i: Int): Double = operation(left(i), right match {
-    case mm: LazyD_Im_MM_Op => mm(i)
-    case lm: LazyD_Im_LM_Op => lm(i)
-    case ml: LazyD_Im_ML_Op => ml(i)
-    case sm: LazyD_Im_SM_Op => sm(i)
-    case ms: LazyD_Im_MS_Op => ms(i)
-    case ld: LazyD_LDD_MMult_Op => ld(i)
-    case dl: LazyD_DLD_MMult_Op => dl(i)
-    case dd: LazyD_DD_MMult_Op => dd(i)
-    case ll: LazyD_LDLD_MMult_Op => ll(i)
-    case m: LazyD_Im_M_Op => m(i)
-  })
-
-  def +(y: DenseMatrix): LazyD_Im_LM_Op = new LazyD_Im_LM_Op(this, y, _ + _)
-  def -(y: DenseMatrix): LazyD_Im_LM_Op = new LazyD_Im_LM_Op(this, y, _ - _)
-  def :*(y: DenseMatrix): LazyD_Im_LM_Op = new LazyD_Im_LM_Op(this, y, _ * _)
-  def /(y: DenseMatrix): LazyD_Im_LM_Op = new LazyD_Im_LM_Op(this, y, _ / _)
-
-  // lazy matrices
-  def +(y: LazyD_Im_MM_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ + _)
-  def -(y: LazyD_Im_MM_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ - _)
-  def :*(y: LazyD_Im_MM_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ * _)
-  def /(y: LazyD_Im_MM_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ / _)
-
-  def +(y: LazyD_Im_ML_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ + _)
-  def -(y: LazyD_Im_ML_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ - _)
-  def :*(y: LazyD_Im_ML_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ * _)
-  def /(y: LazyD_Im_ML_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ / _)
-
-  def +(y: LazyD_Im_LM_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ + _)
-  def -(y: LazyD_Im_LM_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ - _)
-  def :*(y: LazyD_Im_LM_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ * _)
-  def /(y: LazyD_Im_LM_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ / _)
-
-  def +(y: LazyD_Im_LL_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ + _)
-  def -(y: LazyD_Im_LL_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ - _)
-  def :*(y: LazyD_Im_LL_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ * _)
-  def /(y: LazyD_Im_LL_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ / _)
-
-  def +(y: LazyD_Im_M_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ + _)
-  def -(y: LazyD_Im_M_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ - _)
-  def :*(y: LazyD_Im_M_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ * _)
-  def /(y: LazyD_Im_M_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ / _)
-}
-
-case class LazyD_Im_LL_Op(left: LazyImmutableDenseMatrix,
-                          right: LazyImmutableDenseMatrix,
-                          operation: (Double, Double) => Double) extends LazyImmutableDenseMatrix {
-
-  def numRows: Int = {
-    math.max(left match {
-      case mm: LazyD_Im_MM_Op => mm.numRows
-      case lm: LazyD_Im_LM_Op => lm.numRows
-      case ml: LazyD_Im_ML_Op => ml.numRows
-      case sm: LazyD_Im_SM_Op => sm.numRows
-      case ms: LazyD_Im_MS_Op => ms.numRows
-      case ld: LazyD_LDD_MMult_Op => ld.numRows
-      case dl: LazyD_DLD_MMult_Op => dl.numRows
-      case dd: LazyD_DD_MMult_Op => dd.numRows
-      case ll: LazyD_LDLD_MMult_Op => ll.numRows
-      case m: LazyD_Im_M_Op => m.numRows
-    }, right match {
-      case mm: LazyD_Im_MM_Op => mm.numRows
-      case lm: LazyD_Im_LM_Op => lm.numRows
-      case ml: LazyD_Im_ML_Op => ml.numRows
-      case sm: LazyD_Im_SM_Op => sm.numRows
-      case ms: LazyD_Im_MS_Op => ms.numRows
-      case ld: LazyD_LDD_MMult_Op => ld.numRows
-      case dl: LazyD_DLD_MMult_Op => dl.numRows
-      case dd: LazyD_DD_MMult_Op => dd.numRows
-      case ll: LazyD_LDLD_MMult_Op => ll.numRows
-      case m: LazyD_Im_M_Op => m.numRows
-    })
-  }
-  def numCols: Int = math.max(left match {
-    case mm: LazyD_Im_MM_Op => mm.numCols
-    case lm: LazyD_Im_LM_Op => lm.numCols
-    case ml: LazyD_Im_ML_Op => ml.numCols
-    case sm: LazyD_Im_SM_Op => sm.numCols
-    case ms: LazyD_Im_MS_Op => ms.numCols
-    case ld: LazyD_LDD_MMult_Op => ld.numCols
-    case dl: LazyD_DLD_MMult_Op => dl.numCols
-    case dd: LazyD_DD_MMult_Op => dd.numCols
-    case ll: LazyD_LDLD_MMult_Op => ll.numCols
-    case m: LazyD_Im_M_Op => m.numCols
-  }, right match {
-    case mm: LazyD_Im_MM_Op => mm.numCols
-    case lm: LazyD_Im_LM_Op => lm.numCols
-    case ml: LazyD_Im_ML_Op => ml.numCols
-    case sm: LazyD_Im_SM_Op => sm.numCols
-    case ms: LazyD_Im_MS_Op => ms.numCols
-    case ld: LazyD_LDD_MMult_Op => ld.numCols
-    case dl: LazyD_DLD_MMult_Op => dl.numCols
-    case dd: LazyD_DD_MMult_Op => dd.numCols
-    case ll: LazyD_LDLD_MMult_Op => ll.numCols
-    case m: LazyD_Im_M_Op => m.numCols
-  })
-  def size = numRows * numCols
-
-  def compute(): DenseMatrix = {
-    val values = new Array[Double](size)
-    var i = 0
-    while (i < size) {
-      values(i) = this(i)
-      i += 1
-    }
-    new DenseMatrix(numRows, numCols, values)
-  }
-
-  def apply(i: Int): Double = operation(left match {
-    case mm: LazyD_Im_MM_Op => mm(i)
-    case lm: LazyD_Im_LM_Op => lm(i)
-    case ml: LazyD_Im_ML_Op => ml(i)
-    case sm: LazyD_Im_SM_Op => sm(i)
-    case ms: LazyD_Im_MS_Op => ms(i)
-    case ld: LazyD_LDD_MMult_Op => ld(i)
-    case dl: LazyD_DLD_MMult_Op => dl(i)
-    case dd: LazyD_DD_MMult_Op => dd(i)
-    case ll: LazyD_LDLD_MMult_Op => ll(i)
-    case m: LazyD_Im_M_Op => m(i)
-  }, right match {
-    case mm: LazyD_Im_MM_Op => mm(i)
-    case lm: LazyD_Im_LM_Op => lm(i)
-    case ml: LazyD_Im_ML_Op => ml(i)
-    case sm: LazyD_Im_SM_Op => sm(i)
-    case ms: LazyD_Im_MS_Op => ms(i)
-    case ld: LazyD_LDD_MMult_Op => ld(i)
-    case dl: LazyD_DLD_MMult_Op => dl(i)
-    case dd: LazyD_DD_MMult_Op => dd(i)
-    case ll: LazyD_LDLD_MMult_Op => ll(i)
-    case m: LazyD_Im_M_Op => m(i)
-  })
-
-  def +(y: DenseMatrix): LazyD_Im_LM_Op = new LazyD_Im_LM_Op(this, y, _ + _)
-  def -(y: DenseMatrix): LazyD_Im_LM_Op = new LazyD_Im_LM_Op(this, y, _ - _)
-  def :*(y: DenseMatrix): LazyD_Im_LM_Op = new LazyD_Im_LM_Op(this, y, _ * _)
-  def /(y: DenseMatrix): LazyD_Im_LM_Op = new LazyD_Im_LM_Op(this, y, _ / _)
-
-  // lazy matrices
-  def +(y: LazyD_Im_MM_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ + _)
-  def -(y: LazyD_Im_MM_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ - _)
-  def :*(y: LazyD_Im_MM_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ * _)
-  def /(y: LazyD_Im_MM_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ / _)
-
-  def +(y: LazyD_Im_ML_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ + _)
-  def -(y: LazyD_Im_ML_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ - _)
-  def :*(y: LazyD_Im_ML_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ * _)
-  def /(y: LazyD_Im_ML_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ / _)
-
-  def +(y: LazyD_Im_LM_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ + _)
-  def -(y: LazyD_Im_LM_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ - _)
-  def :*(y: LazyD_Im_LM_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ * _)
-  def /(y: LazyD_Im_LM_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ / _)
-
-  def +(y: LazyD_Im_LL_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ + _)
-  def -(y: LazyD_Im_LL_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ - _)
-  def :*(y: LazyD_Im_LL_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ * _)
-  def /(y: LazyD_Im_LL_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ / _)
-
-  def +(y: LazyD_Im_M_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ + _)
-  def -(y: LazyD_Im_M_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ - _)
-  def :*(y: LazyD_Im_M_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ * _)
-  def /(y: LazyD_Im_M_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ / _)
-}
-
-case class LazyD_LDLD_MMult_Op(left: LazyImmutableDenseMatrix,
-                             right: LazyImmutableDenseMatrix) extends LazyImmutableDenseMatrix {
-
-  def numRows: Int = left match {
-    case mm: LazyD_Im_MM_Op => mm.numRows
-    case sm: LazyD_Im_SM_Op => sm.numRows
-    case ms: LazyD_Im_MS_Op => ms.numRows
-    case ld: LazyD_LDD_MMult_Op => ld.numRows
-    case dl: LazyD_DLD_MMult_Op => dl.numRows
-    case dd: LazyD_DD_MMult_Op => dd.numRows
-    case ll: LazyD_LDLD_MMult_Op => ll.numRows
-    case m: LazyD_Im_M_Op => m.numRows
-  }
-  def numCols: Int = right match {
-    case mm: LazyD_Im_MM_Op => mm.numCols
-    case sm: LazyD_Im_SM_Op => sm.numCols
-    case ms: LazyD_Im_MS_Op => ms.numCols
-    case ld: LazyD_LDD_MMult_Op => ld.numCols
-    case dl: LazyD_DLD_MMult_Op => dl.numCols
-    case dd: LazyD_DD_MMult_Op => dd.numCols
-    case ll: LazyD_LDLD_MMult_Op => ll.numCols
-    case m: LazyD_Im_M_Op => m.numCols
-  }
-  def size = numRows * numCols
   lazy val result: DenseMatrix = {
+    var leftScale = 1.0
     val (effLeft: DenseMatrix, leftRes) = left match {
-      case mm: LazyD_Im_MM_Op => (mm.compute(), None)
-      case sm: LazyD_Im_SM_Op => (sm.compute(), None)
-      case ms: LazyD_Im_MS_Op => (ms.compute(), None)
-      case ld: LazyD_LDD_MMult_Op => 
+      case scaled: LazyImDenseScaleOp =>
+        leftScale = scaled.left.value
+        (scaled.right, None)
+      case ll: LazyLL_MMultOp =>
+        if (ll.size < ll.right.size) {
+          (ll.compute(), None)
+        } else {
+          (ll.right.compute(), Option(ll.left))
+        }
+      case ld: LazyLD_MMultOp =>
         if (ld.size < ld.right.size) {
           (ld.compute(), None)
         } else {
           (ld.right, Option(ld.left))
         }
-      case dl: LazyD_DLD_MMult_Op =>
+      case dl: LazyDL_MMultOp =>
         if (dl.size < dl.right.size) {
           (dl.compute(), None)
         } else {
-          (dl.right, Option(dl.left))
+          (dl.right.compute(), Option(dl.left))
         }
-      case dd: LazyD_DD_MMult_Op => 
+      case dd: LazyDD_MMultOp =>
         if (dd.size < dd.right.size) {
           (dd.compute(), None)
         } else {
           (dd.right, Option(dd.left))
         }
-      case ll: LazyD_LDLD_MMult_Op => (ll.compute(), None)
-      case m: LazyD_Im_M_Op => (m.compute(), None)
+      case _ => (left.compute(), None)
     }
+    var rightScale = 1.0
     val (effRight: DenseMatrix, rightRes) = right match {
-      case mm: LazyD_Im_MM_Op => (mm.compute(), None)
-      case sm: LazyD_Im_SM_Op => (sm.compute(), None)
-      case ms: LazyD_Im_MS_Op => (ms.compute(), None)
-      case ld: LazyD_LDD_MMult_Op =>
-        if (ld.size < ld.left.size) {
+      case scaled: LazyImDenseScaleOp =>
+        rightScale = scaled.left.value
+        (scaled.right, None)
+      case ll: LazyLL_MMultOp =>
+        if (ll.size < ll.right.size) {
+          (ll.compute(), None)
+        } else {
+          (ll.right.compute(), Option(ll.left))
+        }
+      case ld: LazyLD_MMultOp =>
+        if (ld.size < ld.right.size) {
           (ld.compute(), None)
         } else {
-          (ld.left, Option(ld.right))
+          (ld.right, Option(ld.left))
         }
-      case dl: LazyD_DLD_MMult_Op =>
-        if (dl.size < dl.left.size) {
+      case dl: LazyDL_MMultOp =>
+        if (dl.size < dl.right.size) {
           (dl.compute(), None)
         } else {
-          (dl.left, Option(dl.right))
+          (dl.right.compute(), Option(dl.left))
         }
-      case dd: LazyD_DD_MMult_Op =>
-        if (dd.size < dd.left.size) {
+      case dd: LazyDD_MMultOp =>
+        if (dd.size < dd.right.size) {
           (dd.compute(), None)
         } else {
-          (dd.left, Option(dd.right))
+          (dd.right, Option(dd.left))
         }
-      case ll: LazyD_LDLD_MMult_Op => (ll.compute(), None)
-      case m: LazyD_Im_M_Op => (m.compute(), None)
+      case _ => (right.compute(), None)
     }
-    val middle = effLeft multiply effRight
+    val middle = 
+      if (leftRes == None && rightRes == None) {
+        val inside = into.getOrElse(DenseMatrix.zeros(effLeft.numRows, effRight.numCols))
+        BLAS.gemm(leftScale * rightScale, effLeft, effRight, 1.0, inside)
+        inside
+      } else {
+        val inside = DenseMatrix.zeros(effLeft.numRows, effRight.numCols)
+        BLAS.gemm(leftScale * rightScale, effLeft, effRight, 1.0, inside)
+        inside
+      }
+    
     val rebuildRight = rightRes.getOrElse(None) match {
-      case l: LazyImmutableDenseMatrix => new LazyD_DLD_MMult_Op(middle, l)
-      case d: DenseMatrix => new LazyD_DD_MMult_Op(middle, d)
+      case l: LazyMatrix => new LazyDL_MMultOp(middle, l)
+      case d: DenseMatrix => new LazyDD_MMultOp(middle, d)
       case None => middle
     }
     leftRes.getOrElse(None) match {
-      case l: LazyImmutableDenseMatrix => 
+      case l: LazyMatrix =>
         rebuildRight match {
-          case r: LazyImmutableDenseMatrix => new LazyD_LDLD_MMult_Op(l, r).compute()
-          case d: DenseMatrix => new LazyD_LDD_MMult_Op(l, d).compute()
+          case r: LazyMatrix => new LazyLL_MMultOp(l, r, into).compute()
+          case d: DenseMatrix => new LazyLD_MMultOp(l, d, into).compute()
         }
       case ld: DenseMatrix =>
         rebuildRight match {
-          case r: LazyImmutableDenseMatrix => new LazyD_DLD_MMult_Op(ld, r).compute()
-          case d: DenseMatrix => ld multiply d
+          case r: LazyMatrix => new LazyDL_MMultOp(ld, r, into).compute()
+          case d: DenseMatrix => new LazyDD_MMultOp(ld, d, into).compute()
         }
       case None =>
         rebuildRight match {
-          case r: LazyImmutableDenseMatrix => r match {
-            case mm: LazyD_Im_MM_Op => mm.compute()
-            case sm: LazyD_Im_SM_Op => sm.compute()
-            case ms: LazyD_Im_MS_Op => ms.compute()
-            case ld: LazyD_LDD_MMult_Op => ld.compute()
-            case dl: LazyD_DLD_MMult_Op => dl.compute()
-            case dd: LazyD_DD_MMult_Op => dd.compute()
-            case ll: LazyD_LDLD_MMult_Op => ll.compute()
-            case m: LazyD_Im_M_Op => m.compute()
-          }
+          case r: LazyDD_MMultOp => new LazyDD_MMultOp(r.left, r.right, into).compute()
+          case l: LazyDL_MMultOp => new LazyDL_MMultOp(l.left, l.right, into).compute()
           case d: DenseMatrix => d
         }
     }
   }
-  def compute(): DenseMatrix = result
-
-  def apply(i: Int): Double = result(i)
+  override def compute(): DenseMatrix = result
 }
 
-case class LazyD_LDD_MMult_Op(left: LazyImmutableDenseMatrix,
-                               right: DenseMatrix) extends LazyImmutableDenseMatrix {
+class LazyLD_MMultOp(
+    val left: LazyMatrix, 
+    val right: DenseMatrix,
+    into: Option[DenseMatrix] = None) extends LazyMMultOp(left, right, into) {
+  override def apply(i: Int): Double = result(i)
+  override def apply(i: Int, j: Int): Double = result(index(i, j))
+  override def copy: brkyvz.linalg.Matrix = compute().copy
+  override def index(i: Int, j: Int): Int = if (!isTransposed) i + numRows * j else j + numCols * i
+  override def map(f: Double => Double): LazyImDenseMOp = new LazyImDenseMOp(this, f)
+  override def transpose: Matrix = compute().transpose
+  override def update(f: Double => Double): Matrix = compute().update(f)
+  override def update(i: Int, j: Int, v: Double): Unit = result.update(i, j, v)
 
-  def numRows: Int = left match {
-    case mm: LazyD_Im_MM_Op => mm.numRows
-    case sm: LazyD_Im_SM_Op => sm.numRows
-    case ms: LazyD_Im_MS_Op => ms.numRows
-    case ld: LazyD_LDD_MMult_Op => ld.numRows
-    case dl: LazyD_DLD_MMult_Op => dl.numRows
-    case dd: LazyD_DD_MMult_Op => dd.numRows
-    case ll: LazyD_LDLD_MMult_Op => ll.numRows
-    case m: LazyD_Im_M_Op => m.numRows
-  }
-  def numCols: Int = right.numCols
-
-  def size = numRows * numCols
   lazy val result: DenseMatrix = {
+    var leftScale = 1.0
     val (effLeft: DenseMatrix, leftRes) = left match {
-      case mm: LazyD_Im_MM_Op => (mm.compute(), None)
-      case sm: LazyD_Im_SM_Op => (sm.compute(), None)
-      case ms: LazyD_Im_MS_Op => (ms.compute(), None)
-      case ld: LazyD_LDD_MMult_Op =>
+      case scaled: LazyImDenseScaleOp =>
+        leftScale = scaled.left.value
+        (scaled.right, None)
+      case ll: LazyLL_MMultOp =>
+        if (ll.size < ll.right.size) {
+          (ll.compute(), None)
+        } else {
+          (ll.right.compute(), Option(ll.left))
+        }
+      case ld: LazyLD_MMultOp =>
         if (ld.size < ld.right.size) {
           (ld.compute(), None)
         } else {
           (ld.right, Option(ld.left))
         }
-      case dl: LazyD_DLD_MMult_Op =>
+      case dl: LazyDL_MMultOp =>
         if (dl.size < dl.right.size) {
           (dl.compute(), None)
         } else {
-          (dl.right, Option(dl.left))
+          (dl.right.compute(), Option(dl.left))
         }
-      case dd: LazyD_DD_MMult_Op =>
+      case dd: LazyDD_MMultOp =>
         if (dd.size < dd.right.size) {
           (dd.compute(), None)
         } else {
           (dd.right, Option(dd.left))
         }
-      case ll: LazyD_LDLD_MMult_Op => (ll.compute(), None)
-      case m: LazyD_Im_M_Op => (m.compute(), None)
+      case _ => (left.compute(), None)
     }
-    val middle = effLeft multiply right
 
-    leftRes match {
-      case l: Option[LazyImmutableDenseMatrix] => new LazyD_LDD_MMult_Op(l.get, middle).compute()
-      case ld: Option[DenseMatrix] => ld.get multiply middle
+    val middle =
+      if (leftRes == None) {
+        val inside = into.getOrElse(DenseMatrix.zeros(effLeft.numRows, right.numCols))
+        BLAS.gemm(leftScale, effLeft, right, 1.0, inside)
+        inside
+      } else {
+        val inside = DenseMatrix.zeros(effLeft.numRows, right.numCols)
+        BLAS.gemm(leftScale, effLeft, right, 1.0, inside)
+        inside
+      }
+
+    leftRes.getOrElse(None) match {
+      case l: LazyMatrix => new LazyLD_MMultOp(l, middle, into).compute()
+      case ld: DenseMatrix => new LazyDD_MMultOp(ld, middle, into).compute()
       case None => middle
     }
   }
-  def compute(): DenseMatrix = result
 
-  def apply(i: Int): Double = result(i)
+  override def compute(): DenseMatrix = result
 }
 
-case class LazyD_DLD_MMult_Op(left: DenseMatrix,
-                               right: LazyImmutableDenseMatrix) extends LazyImmutableDenseMatrix {
+class LazyDL_MMultOp(
+    val left: DenseMatrix, 
+    val right: LazyMatrix,
+    into: Option[DenseMatrix] = None) extends LazyMMultOp(left, right, into) {
+  override def apply(i: Int): Double = result(i)
+  override def apply(i: Int, j: Int): Double = result(index(i, j))
+  override def copy: brkyvz.linalg.Matrix = compute().copy
+  override def index(i: Int, j: Int): Int = if (!isTransposed) i + numRows * j else j + numCols * i
+  override def map(f: Double => Double): LazyImDenseMOp = new LazyImDenseMOp(this, f)
+  override def transpose: Matrix = compute().transpose
+  override def update(f: Double => Double): Matrix = compute().update(f)
+  override def update(i: Int, j: Int, v: Double): Unit = result.update(i, j, v)
 
-  def numRows: Int = left.numRows
-  def numCols: Int = right match {
-    case mm: LazyD_Im_MM_Op => mm.numCols
-    case sm: LazyD_Im_SM_Op => sm.numCols
-    case ms: LazyD_Im_MS_Op => ms.numCols
-    case ld: LazyD_LDD_MMult_Op => ld.numCols
-    case dl: LazyD_DLD_MMult_Op => dl.numCols
-    case dd: LazyD_DD_MMult_Op => dd.numCols
-    case ll: LazyD_LDLD_MMult_Op => ll.numCols
-    case m: LazyD_Im_M_Op => m.numCols
-  }
-  def size = numRows * numCols
   lazy val result: DenseMatrix = {
-
+    var rightScale = 1.0
     val (effRight: DenseMatrix, rightRes) = right match {
-      case mm: LazyD_Im_MM_Op => (mm.compute(), None)
-      case sm: LazyD_Im_SM_Op => (sm.compute(), None)
-      case ms: LazyD_Im_MS_Op => (ms.compute(), None)
-      case ld: LazyD_LDD_MMult_Op =>
-        if (ld.size < ld.left.size) {
+      case scaled: LazyImDenseScaleOp =>
+        rightScale = scaled.left.value
+        (scaled.right, None)
+      case ll: LazyLL_MMultOp =>
+        if (ll.size < ll.right.size) {
+          (ll.compute(), None)
+        } else {
+          (ll.right.compute(), Option(ll.left))
+        }
+      case ld: LazyLD_MMultOp =>
+        if (ld.size < ld.right.size) {
           (ld.compute(), None)
         } else {
-          (ld.left, Option(ld.right))
+          (ld.right, Option(ld.left))
         }
-      case dl: LazyD_DLD_MMult_Op =>
-        if (dl.size < dl.left.size) {
+      case dl: LazyDL_MMultOp =>
+        if (dl.size < dl.right.size) {
           (dl.compute(), None)
         } else {
-          (dl.left, Option(dl.right))
+          (dl.right.compute(), Option(dl.left))
         }
-      case dd: LazyD_DD_MMult_Op =>
-        if (dd.size < dd.left.size) {
+      case dd: LazyDD_MMultOp =>
+        if (dd.size < dd.right.size) {
           (dd.compute(), None)
         } else {
-          (dd.left, Option(dd.right))
+          (dd.right, Option(dd.left))
         }
-      case ll: LazyD_LDLD_MMult_Op => (ll.compute(), None)
-      case m: LazyD_Im_M_Op => (m.compute(), None)
+      case _ => (right.compute(), None)
     }
-    val middle = left multiply effRight
-    rightRes match {
-      case l: Option[LazyImmutableDenseMatrix] => new LazyD_DLD_MMult_Op(middle, l.get).compute()
-      case d: Option[DenseMatrix] => middle multiply d.get
+    val middle =
+      if (rightRes == None) {
+        val inside = into.getOrElse(DenseMatrix.zeros(left.numRows, effRight.numCols))
+        BLAS.gemm(rightScale, left, effRight, 1.0, inside)
+        inside
+      } else {
+        val inside = DenseMatrix.zeros(left.numRows, effRight.numCols)
+        BLAS.gemm(rightScale, left, effRight, 0.0, inside)
+        inside
+      }
+
+    rightRes.getOrElse(None) match {
+      case l: LazyMatrix => new LazyDL_MMultOp(middle, l, into).compute()
+      case d: DenseMatrix => new LazyDD_MMultOp(middle, d, into).compute()
       case None => middle
     }
   }
-  def compute(): DenseMatrix = result
 
-  def apply(i: Int): Double = result(i)
+  override def compute(): DenseMatrix = result
 }
 
-case class LazyD_DD_MMult_Op(left: DenseMatrix,
-                              right: DenseMatrix) extends LazyImmutableDenseMatrix {
+class LazyDD_MMultOp(
+    val left: DenseMatrix,
+    val right: DenseMatrix,
+    into: Option[DenseMatrix] = None) extends LazyMMultOp(left, right, into) {
+  override def apply(i: Int): Double = result(i)
+  override def apply(i: Int, j: Int): Double = result(index(i, j))
+  override def copy: brkyvz.linalg.Matrix = compute().copy
+  override def index(i: Int, j: Int): Int = if (!isTransposed) i + numRows * j else j + numCols * i
+  override def map(f: Double => Double): LazyImDenseMOp = new LazyImDenseMOp(this, f)
+  override def transpose: Matrix = compute().transpose
+  override def update(f: Double => Double): Matrix = compute().update(f)
+  override def update(i: Int, j: Int, v: Double): Unit = result.update(i, j, v)
 
-  def numRows: Int = left.numRows
-  def numCols: Int = right.numCols
-  def size = numRows * numCols
   lazy val result: DenseMatrix = {
-    val C = DenseMatrix.zeros(numRows, numCols)
-    BLAS.gemm(1.0, left, right, 0.0, C)
-    C
+    val inside = into.getOrElse(DenseMatrix.zeros(left.numRows, right.numCols))
+    BLAS.gemm(1.0, left, right, 1.0, inside)
+    inside
   }
-  
-  def compute(): DenseMatrix = result
 
-  def apply(i: Int): Double = result(i)
-
-  def +(y: DenseMatrix): LazyD_Im_LM_Op = new LazyD_Im_LM_Op(this, y, _ + _)
-  def -(y: DenseMatrix): LazyD_Im_LM_Op = new LazyD_Im_LM_Op(this, y, _ - _)
-  def :*(y: DenseMatrix): LazyD_Im_LM_Op = new LazyD_Im_LM_Op(this, y, _ * _)
-  def /(y: DenseMatrix): LazyD_Im_LM_Op = new LazyD_Im_LM_Op(this, y, _ / _)
-
-  // lazy matrices
-  def +(y: LazyD_Im_MM_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ + _)
-  def -(y: LazyD_Im_MM_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ - _)
-  def :*(y: LazyD_Im_MM_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ * _)
-  def /(y: LazyD_Im_MM_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ / _)
-
-  def +(y: LazyD_Im_ML_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ + _)
-  def -(y: LazyD_Im_ML_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ - _)
-  def :*(y: LazyD_Im_ML_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ * _)
-  def /(y: LazyD_Im_ML_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ / _)
-
-  def +(y: LazyD_Im_LM_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ + _)
-  def -(y: LazyD_Im_LM_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ - _)
-  def :*(y: LazyD_Im_LM_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ * _)
-  def /(y: LazyD_Im_LM_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ / _)
-
-  def +(y: LazyD_Im_LL_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ + _)
-  def -(y: LazyD_Im_LL_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ - _)
-  def :*(y: LazyD_Im_LL_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ * _)
-  def /(y: LazyD_Im_LL_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ / _)
-
-  def +(y: LazyD_Im_M_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ + _)
-  def -(y: LazyD_Im_M_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ - _)
-  def :*(y: LazyD_Im_M_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ * _)
-  def /(y: LazyD_Im_M_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ / _)
+  override def compute(): DenseMatrix = result
 }
 
-case class LazyD_Im_SM_Op(left: Double,
-                     right: DenseMatrix,
-                     operation: (Double, Double) => Double) extends LazyImmutableDenseMatrix  {
-
-  def numRows: Int = right.numRows
-  def numCols: Int = right.numCols
-  def size = numRows * numCols
-
-  def compute(): DenseMatrix = right.map(operation(left, _))
-
-  def apply(i: Int): Double = operation(left, right(i))
-
-  def +(y: DenseMatrix): LazyD_Im_LM_Op = new LazyD_Im_LM_Op(this, y, _ + _)
-  def -(y: DenseMatrix): LazyD_Im_LM_Op = new LazyD_Im_LM_Op(this, y, _ - _)
-  def :*(y: DenseMatrix): LazyD_Im_LM_Op = new LazyD_Im_LM_Op(this, y, _ * _)
-  def /(y: DenseMatrix): LazyD_Im_LM_Op = new LazyD_Im_LM_Op(this, y, _ / _)
-
-  // lazy matrices
-  def +(y: LazyD_Im_MM_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ + _)
-  def -(y: LazyD_Im_MM_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ - _)
-  def :*(y: LazyD_Im_MM_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ * _)
-  def /(y: LazyD_Im_MM_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ / _)
-
-  def +(y: LazyD_Im_ML_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ + _)
-  def -(y: LazyD_Im_ML_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ - _)
-  def :*(y: LazyD_Im_ML_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ * _)
-  def /(y: LazyD_Im_ML_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ / _)
-
-  def +(y: LazyD_Im_LM_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ + _)
-  def -(y: LazyD_Im_LM_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ - _)
-  def :*(y: LazyD_Im_LM_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ * _)
-  def /(y: LazyD_Im_LM_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ / _)
-
-  def +(y: LazyD_Im_LL_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ + _)
-  def -(y: LazyD_Im_LL_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ - _)
-  def :*(y: LazyD_Im_LL_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ * _)
-  def /(y: LazyD_Im_LL_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ / _)
-
-  def +(y: LazyD_Im_M_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ + _)
-  def -(y: LazyD_Im_M_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ - _)
-  def :*(y: LazyD_Im_M_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ * _)
-  def /(y: LazyD_Im_M_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ / _)
-}
-
-case class LazyD_Im_MS_Op(left: DenseMatrix,
-                     right: Double,
-                     operation: (Double, Double) => Double) extends LazyImmutableDenseMatrix  {
-
-  def numRows: Int = left.numRows
-  def numCols: Int = left.numCols
-  def size = numRows * numCols
-
-  def compute(): DenseMatrix = left.map(operation(_, right))
-
-  def apply(i: Int): Double = operation(left(i), right)
-
-  def +(y: DenseMatrix): LazyD_Im_LM_Op = new LazyD_Im_LM_Op(this, y, _ + _)
-  def -(y: DenseMatrix): LazyD_Im_LM_Op = new LazyD_Im_LM_Op(this, y, _ - _)
-  def :*(y: DenseMatrix): LazyD_Im_LM_Op = new LazyD_Im_LM_Op(this, y, _ * _)
-  def /(y: DenseMatrix): LazyD_Im_LM_Op = new LazyD_Im_LM_Op(this, y, _ / _)
-
-  // lazy matrices
-  def +(y: LazyD_Im_MM_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ + _)
-  def -(y: LazyD_Im_MM_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ - _)
-  def :*(y: LazyD_Im_MM_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ * _)
-  def /(y: LazyD_Im_MM_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ / _)
-
-  def +(y: LazyD_Im_ML_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ + _)
-  def -(y: LazyD_Im_ML_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ - _)
-  def :*(y: LazyD_Im_ML_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ * _)
-  def /(y: LazyD_Im_ML_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ / _)
-
-  def +(y: LazyD_Im_LM_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ + _)
-  def -(y: LazyD_Im_LM_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ - _)
-  def :*(y: LazyD_Im_LM_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ * _)
-  def /(y: LazyD_Im_LM_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ / _)
-
-  def +(y: LazyD_Im_LL_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ + _)
-  def -(y: LazyD_Im_LL_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ - _)
-  def :*(y: LazyD_Im_LL_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ * _)
-  def /(y: LazyD_Im_LL_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ / _)
-
-  def +(y: LazyD_Im_M_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ + _)
-  def -(y: LazyD_Im_M_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ - _)
-  def :*(y: LazyD_Im_M_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ * _)
-  def /(y: LazyD_Im_M_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ / _)
-}
-
-case class LazyD_Im_M_Op(
-                     parent: DenseMatrix,
-                     operation: Double => Double) extends LazyImmutableDenseMatrix {
-
-  def numRows: Int = parent.numRows
-  def numCols: Int = parent.numCols
-  def size = numRows * numCols
-
-  def compute(): DenseMatrix = parent.map(operation)
-
-  def apply(i: Int): Double = operation(parent(i))
-
-  def +(y: DenseMatrix): LazyD_Im_LM_Op = new LazyD_Im_LM_Op(this, y, _ + _)
-  def -(y: DenseMatrix): LazyD_Im_LM_Op = new LazyD_Im_LM_Op(this, y, _ - _)
-  def :*(y: DenseMatrix): LazyD_Im_LM_Op = new LazyD_Im_LM_Op(this, y, _ * _)
-  def /(y: DenseMatrix): LazyD_Im_LM_Op = new LazyD_Im_LM_Op(this, y, _ / _)
-
-  // lazy matrices
-  def +(y: LazyD_Im_MM_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ + _)
-  def -(y: LazyD_Im_MM_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ - _)
-  def :*(y: LazyD_Im_MM_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ * _)
-  def /(y: LazyD_Im_MM_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ / _)
-
-  def +(y: LazyD_Im_ML_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ + _)
-  def -(y: LazyD_Im_ML_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ - _)
-  def :*(y: LazyD_Im_ML_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ * _)
-  def /(y: LazyD_Im_ML_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ / _)
-
-  def +(y: LazyD_Im_LM_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ + _)
-  def -(y: LazyD_Im_LM_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ - _)
-  def :*(y: LazyD_Im_LM_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ * _)
-  def /(y: LazyD_Im_LM_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ / _)
-
-  def +(y: LazyD_Im_LL_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ + _)
-  def -(y: LazyD_Im_LL_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ - _)
-  def :*(y: LazyD_Im_LL_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ * _)
-  def /(y: LazyD_Im_LL_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ / _)
-
-  def +(y: LazyD_Im_M_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ + _)
-  def -(y: LazyD_Im_M_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ - _)
-  def :*(y: LazyD_Im_M_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ * _)
-  def /(y: LazyD_Im_M_Op): LazyD_Im_LL_Op = new LazyD_Im_LL_Op(this, y, _ / _)
-}
 
 
 

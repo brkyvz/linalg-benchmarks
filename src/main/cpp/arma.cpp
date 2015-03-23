@@ -18,15 +18,33 @@ inline double simpleDenseTest_Arma(int m, int n, int num_trials) {
   mat E = randu<mat>(m, n);
 
   clock_t start;
-  double duration = 0.0;
-
+  start = clock();
   for (unsigned i = 0; i < num_trials; i++) {
-    start = clock();
 
     mat res = ((A + B) / C - D) % E;
 
-    duration += ( std::clock() - start ) / (double) CLOCKS_PER_SEC;
   }
+  double duration = ( std::clock() - start ) / (double) CLOCKS_PER_SEC;
+  return duration / num_trials;
+
+}
+
+// m: numRows of A, n: numCols of A, and numRows of B, k: numCols of B
+inline double gemmSanityTest_Arma(int m, int n, int k, int num_trials) {
+
+  mat A = randu<mat>(m, n);
+  mat C = randu<mat>(n, k);
+  mat E = randu<mat>(m, k);
+
+  clock_t start;
+  start = clock();
+  for (unsigned i = 0; i < num_trials; i++) {
+
+    E += A * C;
+
+  }
+  double duration = ( std::clock() - start ) / (double) CLOCKS_PER_SEC;
+
   return duration / num_trials;
 
 }
@@ -41,15 +59,13 @@ inline double gemmDenseTest_Arma(int m, int n, int k, int num_trials) {
   mat E = randu<mat>(m, k);
 
   clock_t start;
-  double duration = 0.0;
-  
+  start = clock();
   for (unsigned i = 0; i < num_trials; i++) {
-    start = clock();
 
     E += (A + B) * (C - D);
 
-    duration += ( std::clock() - start ) / (double) CLOCKS_PER_SEC;
   }
+  double duration = ( std::clock() - start ) / (double) CLOCKS_PER_SEC;
   
   return duration / num_trials;
 
@@ -63,21 +79,40 @@ inline double mulDenseTest_Arma(int a, int b, int c, int d, int num_trials) {
   mat D = randu<mat>(c, d);
 
   clock_t start;
-  double duration = 0.0;
-    
+  start = clock();
   for (unsigned i = 0; i < num_trials; i++) {
-    start = clock();
 
     mat res = A * B * C * D;
 
-    duration += ( std::clock() - start ) / (double) CLOCKS_PER_SEC;
   }
+  double duration = ( std::clock() - start ) / (double) CLOCKS_PER_SEC;
   return duration / num_trials;
 }
 
-void runArmaTests(int num_trials, int m, int n, int k, int a, int b, int c, int d) {
+// m: numRows of A, n: numCols of A, and numRows of B, k: numCols of B
+inline double denseVectorTest_Arma(int l, int num_trials) {
 
+  vec a = randu<vec>(l);
+  vec b = randu<vec>(l);
+  vec c = randu<vec>(l);
+  vec d = randu<vec>(l);
+  vec e = randu<vec>(l);
+
+  clock_t start;
+  start = clock();
+  for (unsigned i = 0; i < num_trials; i++) {
+    e = a + b + c + d;
+  }
+  double duration = ( std::clock() - start ) / (double) CLOCKS_PER_SEC;
+
+  return duration / num_trials;
+}
+
+void runArmaTests(int num_trials, int l, int m, int n, int k, int a, int b, int c, int d) {
+
+  cout << "Armadillo Vectors Test:\t" << denseVectorTest_Arma(l, num_trials) << endl;
   cout << "Armadillo Simple Test:\t" << simpleDenseTest_Arma(m, n, num_trials) << endl;
+  cout << "Armadillo gemmSanity Test:\t" << gemmDenseTest_Arma(m, n, k, num_trials) << endl;
   cout << "Armadillo gemm Test:\t" << gemmDenseTest_Arma(m, n, k, num_trials) << endl;
   cout << "Armadillo mulDense Test:\t" << mulDenseTest_Arma(a, b, c, d, num_trials) << endl;
 
@@ -93,10 +128,13 @@ int main(int argc, char *argv[]) {
     int c;
     int d;
     int k;
+    int l;
     
     po::options_description desc("Allowed options");
     desc.add_options()
         ("help", "produce help message")
+        ("l", po::value<int>(&l)->default_value(1048576),
+                    "length of vectors in vector addition test")
         ("m", po::value<int>(&m)->default_value(1024),
             "numRows of matrices in Simple Test, and gemm Test")
         ("n", po::value<int>(&n)->default_value(1024),
@@ -118,7 +156,7 @@ int main(int argc, char *argv[]) {
     po::store(po::parse_command_line(argc, argv, desc), vm);
     po::notify(vm);
 
-    runArmaTests(trials, m, n, k, a, b, c, d);
+    runArmaTests(trials, l, m, n, k, a, b, c, d);
 
     return 0;
 }
