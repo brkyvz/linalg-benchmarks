@@ -16,7 +16,11 @@ object Main {
     b: Int = 512,
     c: Int = 256,
     d: Int = 128,
-    l: Int = 1048576)
+    l: Int = 1048576,
+    skipVector: Boolean = false,
+    skipSimple: Boolean = false,
+    skipGemm: Boolean = false,
+    skipMult: Boolean = false)
 
   def main(args: Array[String]) {
     val defaultParams = Params()
@@ -53,6 +57,18 @@ object Main {
       opt[Int]("l")
         .text(s"length of vectors, default: ${defaultParams.l} (auto)")
         .action((x, c) => c.copy(l = x))
+      opt[Unit]("skip-vec")
+        .text("use Kryo serialization")
+        .action((_, c) => c.copy(skipVector = true))
+      opt[Unit]("skip-simple")
+        .text("use Kryo serialization")
+        .action((_, c) => c.copy(skipSimple = true))
+      opt[Unit]("skip-gemm")
+        .text("use Kryo serialization")
+        .action((_, c) => c.copy(skipGemm = true))
+      opt[Unit]("skip-mult")
+        .text("use Kryo serialization")
+        .action((_, c) => c.copy(skipMult = true))
     }
 
     parser.parse(args, defaultParams).map { params =>
@@ -63,11 +79,16 @@ object Main {
   }
   
   def run(params: Params): Unit = {
-    println(s"MLlib Vectors Test:\t${denseVectorTest_MLlib(params.l, params.trials, params.warmup)}")
-    println(s"MLlib Simple Test:\t${simpleDenseTest_MLlib(params.m, params.n, params.trials, params.warmup)}")
-    println(s"MLlib gemm Sanity Test:\t${gemmDenseTest_MLlib(params.m, params.n, params.k, params.trials, params.warmup)}")
-    println(s"MLlib gemm Test:\t${gemmDenseTest_MLlib(params.m, params.n, params.k, params.trials, params.warmup)}")
-    println(s"MLlib mulDense Test:\t${mulDenseTest_MLlib(params.a, params.b, params.c, params.d, params.trials, params.warmup)}")
+    if (!params.skipVector)
+      println(s"MLlib Vectors Test:\t${denseVectorTest_MLlib(params.l, params.trials, params.warmup)}")
+    if (!params.skipSimple)
+      println(s"MLlib Simple Test:\t${simpleDenseTest_MLlib(params.m, params.n, params.trials, params.warmup)}")
+    if (!params.skipGemm) {
+      println(s"MLlib gemm Sanity Test:\t${gemmDenseTest_MLlib(params.m, params.n, params.k, params.trials, params.warmup)}")
+      println(s"MLlib gemm Test:\t${gemmDenseTest_MLlib(params.m, params.n, params.k, params.trials, params.warmup)}")
+    }
+    if (!params.skipMult)
+      println(s"MLlib mulDense Test:\t${mulDenseTest_MLlib(params.a, params.b, params.c, params.d, params.trials, params.warmup)}")
   }
   
   def simpleDenseTest_MLlib(m: Int, n: Int, trials: Int, warmup: Int): Double = {

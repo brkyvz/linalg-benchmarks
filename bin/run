@@ -1,23 +1,34 @@
 #!/bin/bash
 
 # Test arguments
-export M=2048
-export N=2048
+export M=( 1024 2048 4096 8192 )
+export N=( 1024 2048 4096 8192 )
 export TRIALS=10
 export WARMUP=10 # number of trials to warm up the JVM
-export K=1024
+export K=( 1024 2048 4096 8192 )
 export A=2048
 export B=1024
 export C=512
 export D=256
-export L=1048576
+export L=( 1024 4096 32768 262144 1048576 8388608 67108864 )
+
+# Default values
+export M_DEF=2048
+export N_DEF=2048
+export K_DEF=1024
+export L_DEF=1048576
 
 export BM_DIR=$PWD
 export CPP_DIR=$BM_DIR/src/main/cpp
 
+# Output files
 export RESULTS=$BM_DIR/results.tsv
+export LOGS=$BM_DIR/log.txt
 
-bash $BM_DIR/bin/initialize 1> /dev/null
+# JVM Options
+export JVM_OPTS="-Xmx2g"
+
+bash $BM_DIR/bin/initialize 2>&1 | tee $LOGS
 
 # install eigen
 if [ -z ${EIGEN+x} ]; then
@@ -66,19 +77,91 @@ cd $BM_DIR
 # Compile C++ libraries
 rm $CPP_DIR/arma $CPP_DIR/eigen $CPP_DIR/ublas $CPP_DIR/mtl
 
-g++ -Wall $CPP_DIR/arma.cpp -o $CPP_DIR/arma -O2 -I $ARMA -DARMA_DONT_USE_WRAPPER -framework Accelerate -lboost_program_options
-g++ -Wall $CPP_DIR/eigen.cpp -o $CPP_DIR/eigen -O2 -I $EIGEN -framework Accelerate -lboost_program_options
-g++ -Wall $CPP_DIR/ublas.cpp -o $CPP_DIR/ublas -O2 -framework Accelerate -lboost_program_options
+g++ -Wall $CPP_DIR/arma.cpp -o $CPP_DIR/arma -O3 -I $ARMA -DARMA_DONT_USE_WRAPPER -framework Accelerate -lboost_program_options
+g++ -Wall $CPP_DIR/eigen.cpp -o $CPP_DIR/eigen -O3 -msse2 -I $EIGEN -framework Accelerate -lboost_program_options
+# g++ -Wall $CPP_DIR/ublas.cpp -o $CPP_DIR/ublas -O3 -framework Accelerate -lboost_program_options
 # g++ -Wall $CPP_DIR/mtl.cpp -o $CPP_DIR/mtl -O2 -I $MTL4 -framework Accelerate -lboost_program_options
 
 # Compile Scala code
-$BM_DIR/build/sbt assembly > /dev/null
+$BM_DIR/build/sbt assembly 2>&1 | tee -a $LOGS
 export MLLIB=$BM_DIR/target/scala-2.10/linalg-benchmarks-assembly-0.0.1.jar
 export MLLIB_MAIN="brkyvz.linalg.Main"
 
-$CPP_DIR/arma --m $M --n $N --k $K --trials $TRIALS --a $A --b $B --c $C --d $D --l $L 1> $RESULTS
-$CPP_DIR/eigen --m $M --n $N --k $K --trials $TRIALS --a $A --b $B --c $C --d $D --l $L 1>> $RESULTS
-# $CPP_DIR/ublas --m $M --n $N --k $K --trials $TRIALS --a $A --b $B --c $C --d $D --l $L 1>> $RESULTS
-java -cp $MLLIB $MLLIB_MAIN --m $M --n $N --k $K --trials $TRIALS --warmup $WARMUP --a $A --b $B --c $C --d $D --l $L 1>> $RESULTS 2> /dev/null
 
+echo "" > $RESULTS
 
+# vary L.
+for L_VAL in "${L[@]}"; do
+  echo -e "l: $L_VAL" >> $RESULTS
+  $CPP_DIR/arma --m $M_DEF --n $N_DEF --k $K_DEF --trials $TRIALS --a $A --b $B --c $C --d $D \
+    --l $L_VAL --skip-simple true --skip-gemm true --skip-mult true | tee -a $RESULTS
+  $CPP_DIR/eigen --m $M_DEF --n $N_DEF --k $K_DEF --trials $TRIALS --a $A --b $B --c $C --d $D \
+    --l $L_VAL --skip-simple true --skip-gemm true --skip-mult true | tee -a $RESULTS
+  # $CPP_DIR/ublas --m $M --n $N --k $K --trials $TRIALS --a $A --b $B --c $C --d $D --l $L | tee -a $RESULTS
+  java $JVM_OPTS -cp $MLLIB $MLLIB_MAIN --m $M_DEF --n $N_DEF --k $K_DEF --trials $TRIALS --warmup $WARMUP \
+    --a $A --b $B --c $C --d $D --l $L_VAL --skip-simple --skip-gemm --skip-mult 2>> $LOGS | tee -a $RESULTS
+done
+
+# vary M.
+for M_VAL in "${M[@]}"; do
+  echo -e "m: $M_VAL\tn: $N_DEF\tk: $K_DEF" >> $RESULTS
+  $CPP_DIR/arma --m $M_VAL --n $N_DEF --k $K_DEF --trials $TRIALS --a $A --b $B --c $C --d $D \
+    --l $L_DEF --skip-vec true --skip-mult true | tee -a $RESULTS
+  $CPP_DIR/eigen --m $M_VAL --n $N_DEF --k $K_DEF --trials $TRIALS --a $A --b $B --c $C --d $D \
+    --l $L_DEF --skip-vec true --skip-mult true | tee -a $RESULTS
+  # $CPP_DIR/ublas --m $M --n $N --k $K --trials $TRIALS --a $A --b $B --c $C --d $D --l $L | tee -a $RESULTS
+  java $JVM_OPTS -cp $MLLIB $MLLIB_MAIN --m $M_VAL --n $N_DEF --k $K_DEF --trials $TRIALS --warmup $WARMUP \
+    --a $A --b $B --c $C --d $D --l $L_DEF --skip-vec --skip-mult 2>> $LOGS | tee -a $RESULTS
+done
+
+# vary N.
+for N_VAL in "${N[@]}"; do
+  echo -e "m: $M_DEF\tn: $N_VAL\tk: $K_DEF" >> $RESULTS
+  $CPP_DIR/arma --m $M_DEF --n $N_VAL --k $K_DEF --trials $TRIALS --a $A --b $B --c $C --d $D \
+    --l $L_DEF --skip-vec true --skip-mult true | tee -a $RESULTS
+  $CPP_DIR/eigen --m $M_DEF --n $N_VAL --k $K_DEF --trials $TRIALS --a $A --b $B --c $C --d $D \
+    --l $L_DEF --skip-vec true --skip-mult true | tee -a $RESULTS
+  # $CPP_DIR/ublas --m $M --n $N --k $K --trials $TRIALS --a $A --b $B --c $C --d $D --l $L | tee -a $RESULTS
+  java $JVM_OPTS -cp $MLLIB $MLLIB_MAIN --m $M_DEF --n $N_VAL --k $K_DEF --trials $TRIALS --warmup $WARMUP \
+    --a $A --b $B --c $C --d $D --l $L_DEF --skip-vec --skip-mult 2>> $LOGS | tee -a $RESULTS
+done
+
+# vary K.
+for K_VAL in "${K[@]}"; do
+  echo -e "m: $M_DEF\tn: $N_DEF\tk: $K_VAL" >> $RESULTS
+  $CPP_DIR/arma --m $M_DEF --n $N_DEF --k $K_VAL --trials $TRIALS --a $A --b $B --c $C --d $D \
+    --l $L_DEF --skip-vec true --skip-simple true --skip-mult true | tee -a $RESULTS
+  $CPP_DIR/eigen --m $M_DEF --n $N_DEF --k $K_VAL --trials $TRIALS --a $A --b $B --c $C --d $D \
+    --l $L_DEF --skip-vec true --skip-simple true --skip-mult true | tee -a $RESULTS
+  # $CPP_DIR/ublas --m $M --n $N --k $K --trials $TRIALS --a $A --b $B --c $C --d $D --l $L | tee -a $RESULTS
+  java $JVM_OPTS -cp $MLLIB $MLLIB_MAIN --m $M_DEF --n $N_DEF --k $K_VAL --trials $TRIALS --warmup $WARMUP \
+    --a $A --b $B --c $C --d $D --l $L_DEF --skip-vec --skip-simple --skip-mult 2>> $LOGS | tee -a $RESULTS
+done
+
+# Change mult order.
+echo -e "a: $A\tb: $B\tc: $C\td: $D" >> $RESULTS
+$CPP_DIR/arma --m $M_DEF --n $N_DEF --k $K_VAL --trials $TRIALS --a $A --b $B --c $C --d $D \
+  --l $L_DEF --skip-vec true --skip-simple true --skip-gemm true | tee -a $RESULTS
+$CPP_DIR/eigen --m $M_DEF --n $N_DEF --k $K_VAL --trials $TRIALS --a $A --b $B --c $C --d $D \
+  --l $L_DEF --skip-vec true --skip-simple true --skip-gemm true | tee -a $RESULTS
+# $CPP_DIR/ublas --m $M --n $N --k $K --trials $TRIALS --a $A --b $B --c $C --d $D --l $L | tee -a $RESULTS
+java $JVM_OPTS -cp $MLLIB $MLLIB_MAIN --m $M_DEF --n $N_DEF --k $K_VAL --trials $TRIALS --warmup $WARMUP \
+  --a $A --b $B --c $C --d $D --l $L_DEF --skip-vec --skip-simple --skip-gemm 2>> $LOGS | tee -a $RESULTS
+
+echo -e "a: $D\tb: $C\tc: $B\td: $A" >> $RESULTS
+$CPP_DIR/arma --m $M_DEF --n $N_DEF --k $K_VAL --trials $TRIALS --a $D --b $C --c $B --d $A \
+  --l $L_DEF --skip-vec true --skip-simple true --skip-gemm true | tee -a $RESULTS
+$CPP_DIR/eigen --m $M_DEF --n $N_DEF --k $K_VAL --trials $TRIALS --a $D --b $C --c $B --d $A \
+  --l $L_DEF --skip-vec true --skip-simple true --skip-gemm true | tee -a $RESULTS
+# $CPP_DIR/ublas --m $M --n $N --k $K --trials $TRIALS --a $A --b $B --c $C --d $D --l $L | tee -a $RESULTS
+java $JVM_OPTS -cp $MLLIB $MLLIB_MAIN --m $M_DEF --n $N_DEF --k $K_VAL --trials $TRIALS --warmup $WARMUP \
+  --a $D --b $C --c $B --d $A --l $L_DEF --skip-vec --skip-simple --skip-gemm 2>> $LOGS | tee -a $RESULTS
+  
+echo -e "a: $A\tb: $C\tc: $D\td: $B" >> $RESULTS
+$CPP_DIR/arma --m $M_DEF --n $N_DEF --k $K_VAL --trials $TRIALS --a $A --b $C --c $D --d $B \
+  --l $L_DEF --skip-vec true --skip-simple true --skip-gemm true | tee -a $RESULTS
+$CPP_DIR/eigen --m $M_DEF --n $N_DEF --k $K_VAL --trials $TRIALS --a $A --b $C --c $D --d $B \
+  --l $L_DEF --skip-vec true --skip-simple true --skip-gemm true | tee -a $RESULTS
+# $CPP_DIR/ublas --m $M --n $N --k $K --trials $TRIALS --a $A --b $B --c $C --d $D --l $L | tee -a $RESULTS
+java $JVM_OPTS -cp $MLLIB $MLLIB_MAIN --m $M_DEF --n $N_DEF --k $K_VAL --trials $TRIALS --warmup $WARMUP \
+  --a $A --b $C --c $D --d $B --l $L_DEF --skip-vec --skip-simple --skip-gemm 2>> $LOGS | tee -a $RESULTS

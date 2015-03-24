@@ -1,6 +1,9 @@
 #include <iostream>
 #include <cstdio>
 #include <ctime>
+
+#define EIGEN_NO_DEBUG // turn off assertions
+
 #include <Eigen/Dense>
 #include "boost/program_options.hpp"
 
@@ -108,27 +111,27 @@ inline double denseVectorTest_Eigen(int l, int num_trials) {
   return duration / num_trials;
 }
 
-void runEigenTests(int num_trials, int l, int m, int n, int k, int a, int b, int c, int d) {
+void runEigenTests(int num_trials, int l, int m, int n, int k, int a, int b, int c, int d,
+    bool skip_vec, bool skip_simple, bool skip_gemm, bool skip_mult) {
+   
+  if (!skip_vec)
+    cout << "Eigen Vectors Test:\t" << denseVectorTest_Eigen(l, num_trials) << endl;
+  if (!skip_simple)
+    cout << "Eigen Simple Test:\t" << simpleDenseTest_Eigen(m, n, num_trials) << endl;
+  if (!skip_gemm) {
+    cout << "Eigen gemmSanity Test:\t" << gemmDenseTest_Eigen(m, n, k, num_trials) << endl;
+    cout << "Eigen gemm Test:\t" << gemmDenseTest_Eigen(m, n, k, num_trials) << endl;
+  }
 
-   cout << "Eigen Vectors Test:\t" << denseVectorTest_Eigen(l, num_trials) << endl;
-   cout << "Eigen Simple Test:\t" << simpleDenseTest_Eigen(m, n, num_trials) << endl;
-   cout << "Eigen gemmSanity Test:\t" << gemmDenseTest_Eigen(m, n, k, num_trials) << endl;
-   cout << "Eigen gemm Test:\t" << gemmDenseTest_Eigen(m, n, k, num_trials) << endl;
-   cout << "Eigen mulDense Test:\t" << mulDenseTest_Eigen(a, b, c, d, num_trials) << endl;
+  if (!skip_mult)
+    cout << "Eigen mulDense Test:\t" << mulDenseTest_Eigen(a, b, c, d, num_trials) << endl;
 
 }
 
 int main(int argc, char *argv[]) {
 
-    int m;
-    int n;
-    int trials;
-    int a;
-    int b;
-    int c;
-    int d;
-    int k;
-    int l;
+    int l, m, n, k, a, b, c, d, trials;
+    bool skip_vec, skip_simple, skip_gemm, skip_mult;
 
     po::options_description desc("Allowed options");
     desc.add_options()
@@ -150,13 +153,21 @@ int main(int argc, char *argv[]) {
             "size matrix C in mulDense Test")
         ("d", po::value<int>(&d)->default_value(128),
             "size matrix D in mulDense Test")
+        ("skip-vec", po::value<bool>(&skip_vec)->default_value(false),
+            "skip vectors Test")
+        ("skip-simple", po::value<bool>(&skip_simple)->default_value(false),
+            "skip simple Test")
+        ("skip-gemm", po::value<bool>(&skip_gemm)->default_value(false),
+            "skip gemm Tests")
+        ("skip-mult", po::value<bool>(&skip_mult)->default_value(false),
+            "skip mulDense Test")
     ;
 
     po::variables_map vm;
     po::store(po::parse_command_line(argc, argv, desc), vm);
     po::notify(vm);
 
-    runEigenTests(trials, l, m, n, k, a, b, c, d);
+    runEigenTests(trials, l, m, n, k, a, b, c, d, skip_vec, skip_simple, skip_gemm, skip_mult);
 
     return 0;
 }

@@ -78,7 +78,8 @@ inline double mulDenseTest_MTL(int a, int b, int c, int d, int num_trials) {
 
 }
 
-void runMTLTests(int num_trials, int m, int n, int k, int a, int b, int c, int d) {
+void runMTLTests(int num_trials, int m, int n, int k, int a, int b, int c, int d,
+    bool skip_vec, bool skip_simple, bool skip_gemm, bool skip_mult) {
 
    cout << "MTL Simple Test:\t" << simpleDenseTest_MTL(m, n, num_trials) << endl;
    cout << "MTL gemm Test:\t" << gemmDenseTest_MTL(m, n, k, num_trials) << endl;
@@ -88,16 +89,9 @@ void runMTLTests(int num_trials, int m, int n, int k, int a, int b, int c, int d
 
 int main(int argc, char *argv[]) {
 
-    int m;
-    int n;
-    int trials;
-    int a;
-    int b;
-    int c;
-    int d;
-    int k;
-    int l;
-  
+    int l, m, n, k, a, b, c, d, trials;
+    bool skip_vec, skip_simple, skip_gemm, skip_mult;
+
     po::options_description desc("Allowed options");
     desc.add_options()
         ("help", "produce help message")
@@ -118,13 +112,21 @@ int main(int argc, char *argv[]) {
             "size matrix C in mulDense Test")
         ("d", po::value<int>(&d)->default_value(128),
             "size matrix D in mulDense Test")
+        ("skip-vec", po::value<bool>(&skip_vec)->default_value(false),
+            "skip vectors Test")
+        ("skip-simple", po::value<bool>(&skip_simple)->default_value(false),
+            "skip simple Test")
+        ("skip-gemm", po::value<bool>(&skip_gemm)->default_value(false),
+            "skip gemm Tests")
+        ("skip-mult", po::value<bool>(&skip_mult)->default_value(false),
+            "skip mulDense Test")
     ;
 
     po::variables_map vm;
     po::store(po::parse_command_line(argc, argv, desc), vm);
     po::notify(vm);
 
-    runMTLTests(trials, l, m, n, k, a, b, c, d);
+    runMTLTests(trials, l, m, n, k, a, b, c, d, skip_vec, skip_simple, skip_gemm, skip_mult);
 
     return 0;
 }
