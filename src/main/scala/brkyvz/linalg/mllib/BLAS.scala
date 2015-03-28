@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package brkyvz.linalg
+package brkyvz.linalg.mllib
 
 import com.github.fommil.netlib.BLAS.{getInstance => NativeBLAS}
 import com.github.fommil.netlib.{BLAS => NetlibBLAS, F2jBLAS}

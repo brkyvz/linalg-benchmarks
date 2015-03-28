@@ -14,14 +14,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package brkyvz.linalg
-
+package brkyvz.linalg.mllib
 
 import java.util.{Arrays, Random}
 
-import brkyvz.linalg.MatrixOperators.MatrixLikeDouble
-
-import scala.collection.mutable.{ArrayBuilder => MArrayBuilder, HashSet => MHashSet, ArrayBuffer}
+import scala.collection.mutable.{ArrayBuffer, ArrayBuilder => MArrayBuilder, HashSet => MHashSet}
+import brkyvz.linalg.mllib.MatrixOperators._
 
 /**
  * Trait for a local matrix.
@@ -892,8 +890,6 @@ trait MatrixLike {
   def size: Int = numRows * numCols
 
   def apply(i: Int): Double
-
-  import MatrixOperators._
   def +(y: MatrixLike): LazyMatrix = add(this, y)
   def -(y: MatrixLike): LazyMatrix = sub(this, y)
   def :*(y: MatrixLike): LazyMatrix = mul(this, y)
@@ -939,7 +935,7 @@ class LazyImDenseMMOp(
     val ind = index(i, j)
     operation(left(ind), right(ind))
   }
-  override def copy: brkyvz.linalg.Matrix = compute().copy
+  override def copy: Matrix = compute().copy
   override def index(i: Int, j: Int): Int = if (!isTransposed) i + numRows * j else j + numCols * i
   override def map(f: Double => Double): LazyImDenseMOp = new LazyImDenseMOp(this, f)
   override def transpose: Matrix = compute().transpose
@@ -963,7 +959,7 @@ class LazyImDenseMOp(parent: Matrix,
 
   override def apply(i: Int): Double = operation(parent(i))
   override def apply(i: Int, j: Int): Double = operation(parent(index(i, j)))
-  override def copy: brkyvz.linalg.Matrix = compute().copy
+  override def copy: Matrix = compute().copy
   override def index(i: Int, j: Int): Int = if (!isTransposed) i + numRows * j else j + numCols * i
   override def map(f: Double => Double): LazyImDenseMOp = new LazyImDenseMOp(this, f)
   override def transpose: Matrix = compute().transpose
@@ -986,7 +982,7 @@ class LazyLL_MMultOp(
     into: Option[DenseMatrix] = None) extends LazyMMultOp(left, right, into) {
   override def apply(i: Int): Double = result(i)
   override def apply(i: Int, j: Int): Double = result(index(i, j))
-  override def copy: brkyvz.linalg.Matrix = compute().copy
+  override def copy: Matrix = compute().copy
   override def index(i: Int, j: Int): Int = if (!isTransposed) i + numRows * j else j + numCols * i
   override def map(f: Double => Double): LazyImDenseMOp = new LazyImDenseMOp(this, f)
   override def transpose: Matrix = compute().transpose
@@ -1100,7 +1096,7 @@ class LazyLD_MMultOp(
     into: Option[DenseMatrix] = None) extends LazyMMultOp(left, right, into) {
   override def apply(i: Int): Double = result(i)
   override def apply(i: Int, j: Int): Double = result(index(i, j))
-  override def copy: brkyvz.linalg.Matrix = compute().copy
+  override def copy: Matrix = compute().copy
   override def index(i: Int, j: Int): Int = if (!isTransposed) i + numRows * j else j + numCols * i
   override def map(f: Double => Double): LazyImDenseMOp = new LazyImDenseMOp(this, f)
   override def transpose: Matrix = compute().transpose
@@ -1167,7 +1163,7 @@ class LazyDL_MMultOp(
     into: Option[DenseMatrix] = None) extends LazyMMultOp(left, right, into) {
   override def apply(i: Int): Double = result(i)
   override def apply(i: Int, j: Int): Double = result(index(i, j))
-  override def copy: brkyvz.linalg.Matrix = compute().copy
+  override def copy: Matrix = compute().copy
   override def index(i: Int, j: Int): Int = if (!isTransposed) i + numRows * j else j + numCols * i
   override def map(f: Double => Double): LazyImDenseMOp = new LazyImDenseMOp(this, f)
   override def transpose: Matrix = compute().transpose
@@ -1233,7 +1229,7 @@ class LazyDD_MMultOp(
     into: Option[DenseMatrix] = None) extends LazyMMultOp(left, right, into) {
   override def apply(i: Int): Double = result(i)
   override def apply(i: Int, j: Int): Double = result(index(i, j))
-  override def copy: brkyvz.linalg.Matrix = compute().copy
+  override def copy: Matrix = compute().copy
   override def index(i: Int, j: Int): Int = if (!isTransposed) i + numRows * j else j + numCols * i
   override def map(f: Double => Double): LazyImDenseMOp = new LazyImDenseMOp(this, f)
   override def transpose: Matrix = compute().transpose

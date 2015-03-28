@@ -15,12 +15,10 @@
  * limitations under the License.
  */
 
-package brkyvz.linalg
+package brkyvz.linalg.mllib
 
-import java.util
 import java.lang.{Double => JavaDouble, Integer => JavaInteger, Iterable => JavaIterable}
-
-import brkyvz.linalg.VectorOperators._
+import java.util
 
 import scala.annotation.varargs
 import scala.collection.JavaConverters._
@@ -489,6 +487,8 @@ class LazyDenseVOp(parent: VectorLike,
 }
 
 trait VectorLike {
+  
+  import brkyvz.linalg.mllib.VectorOperators._
 
   /**
    * Size of the vector.
@@ -496,8 +496,6 @@ trait VectorLike {
   def size: Int
   
   def apply(i: Int): Double
-
-  import VectorOperators._
   def +(y: VectorLike): LazyVector = add(this, y)
   def -(y: VectorLike): LazyVector = sub(this, y)
   def *(y: VectorLike): LazyVector = mul(this, y)

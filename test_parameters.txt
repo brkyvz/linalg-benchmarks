@@ -1,0 +1,24 @@
+# Test arguments
+export M=( 1024 2048 4096 8192 )
+export N=( 1024 2048 4096 8192 )
+export TRIALS=10
+export WARMUP=10 # number of trials to warm up the JVM
+export K=( 1024 2048 4096 8192 )
+export A=2048
+export B=1024
+export C=512
+export D=256
+export L=( 1024 4096 32768 262144 1048576 8388608 67108864 )
+
+# Default values
+export M_DEF=2048
+export N_DEF=2048
+export K_DEF=1024
+export L_DEF=1048576
+
+# Output files
+export RESULTS=$BM_DIR/results.tsv
+export LOGS=$BM_DIR/log.txt
+
+# JVM Options
+export JVM_OPTS="-Xmx4g"

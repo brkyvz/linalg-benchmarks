@@ -1,5 +1,5 @@
 
-package brkyvz.linalg
+package brkyvz.linalg.mllib
 
 object VectorOperators {
 
